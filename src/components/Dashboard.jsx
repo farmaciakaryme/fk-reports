@@ -17,7 +17,7 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
       detail: 'Crear y administrar información de pacientes',
       icon: Users,
       color: 'from-blue-500 to-cyan-500',
-      action: () => console.log('Navigate to patients')
+      action: () => onNavigate('patients')
     },
     {
       id: 'tests',

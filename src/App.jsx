@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
-import TestManagement from './components/TestManagement';
+import TestManagement from './components/Test_Management';
 import ReportesManagement from './components/ReportesManagement';
+import PatientsManagement from './components/PatientsManagement';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -30,17 +31,17 @@ function App() {
 
   const renderView = () => {
     switch (currentView) {
-      case 'tests':
+      case 'patients':
         return (
-          <TestManagement 
+          <PatientsManagement
             currentUser={currentUser}
             onLogout={handleLogout}
             onNavigate={navigateTo}
           />
         );
-      case 'patients':
+      case 'tests':
         return (
-          <Dashboard 
+          <TestManagement 
             currentUser={currentUser}
             onLogout={handleLogout}
             onNavigate={navigateTo}
