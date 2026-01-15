@@ -1,161 +1,26 @@
 import React, { useState, useCallback } from 'react';
 import { ArrowLeft, Download, AlertCircle, Save } from 'lucide-react';
 import PatientSearchModal from './PatientSearchModal';
-import { reportesAPI } from '../services/api';
 
-const DRUG_TESTS = [
-  { key: 'canabinoides', label: 'CANABINOIDES' },
-  { key: 'cocaina', label: 'COCAINA' },
-  { key: 'anfetaminas', label: 'ANFETAMINAS' },
-  { key: 'metanfetaminas', label: 'METANFETAMINAS' },
-  { key: 'morfina', label: 'MORFINA OPIACEOS' },
-  { key: 'benzodiazepinas', label: 'BENZODIAZEPINAS' }
+// Definir las pruebas de Biometría Hemática con valores de referencia
+const BIOMETRIA_TESTS = [
+  { key: 'hemoglobina', label: 'Hemoglobina', unidad: 'g/dL', referencia: 'H: 13.5-17.5, M: 12.0-16.0' },
+  { key: 'hematocrito', label: 'Hematocrito', unidad: '%', referencia: 'H: 40-54, M: 37-47' },
+  { key: 'leucocitos', label: 'Leucocitos', unidad: 'x10³/µL', referencia: '4.5-11.0' },
+  { key: 'eritrocitos', label: 'Eritrocitos', unidad: 'x10⁶/µL', referencia: 'H: 4.5-5.9, M: 4.0-5.2' },
+  { key: 'plaquetas', label: 'Plaquetas', unidad: 'x10³/µL', referencia: '150-400' },
+  { key: 'vcm', label: 'VCM', unidad: 'fL', referencia: '80-100' },
+  { key: 'hcm', label: 'HCM', unidad: 'pg', referencia: '27-31' },
+  { key: 'chcm', label: 'CHCM', unidad: 'g/dL', referencia: '32-36' },
+  { key: 'neutrofilos', label: 'Neutrófilos', unidad: '%', referencia: '40-70' },
+  { key: 'linfocitos', label: 'Linfocitos', unidad: '%', referencia: '20-40' },
+  { key: 'monocitos', label: 'Monocitos', unidad: '%', referencia: '2-8' },
+  { key: 'eosinofilos', label: 'Eosinófilos', unidad: '%', referencia: '1-4' },
+  { key: 'basofilos', label: 'Basófilos', unidad: '%', referencia: '0-1' }
 ];
 
-const ValidationAlert = ({ errors }) => {
-  if (errors.length === 0) return null;
-  
-  return (
-    <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-md text-sm">
-      <div className="flex items-start mb-1.5">
-        <AlertCircle className="w-4 h-4 text-red-500 mr-1.5 flex-shrink-0 mt-0.5" />
-        <span className="text-red-700 font-medium">Completa los siguientes campos:</span>
-      </div>
-      <ul className="text-xs text-red-600 list-disc list-inside ml-5">
-        {errors.map((error, index) => (
-          <li key={index}>{error}</li>
-        ))}
-      </ul>
-    </div>
-  );
-};
-
-const DrugTestRow = ({ test, value, onChange }) => (
-  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
-    <div className="mb-1.5">
-      <span className="font-medium text-gray-800 text-xs">{test.label}</span>
-    </div>
-    <div className="grid grid-cols-2 gap-1.5">
-      <button
-        type="button"
-        onClick={() => onChange(test.key, 'NEGATIVA')}
-        className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-          value === 'NEGATIVA'
-            ? 'bg-green-500 text-white'
-            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-        }`}
-      >
-        NEGATIVA
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(test.key, 'POSITIVA')}
-        className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-          value === 'POSITIVA'
-            ? 'bg-red-500 text-white'
-            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-        }`}
-      >
-        POSITIVA
-      </button>
-    </div>
-  </div>
-);
-
-const AntidopingForm = ({ formData, handleInputChange, onBack, generateReport, selectedPatient }) => {
-  const [errors, setErrors] = useState([]);
-
-  const handleChange = useCallback((field, value) => {
-    handleInputChange(field, value);
-    if (errors.length > 0) setErrors([]);
-  }, [handleInputChange, errors.length]);
-
-  const handleGenerateReport = useCallback(() => {
-    const validationErrors = [];
-    if (!formData.fecha) validationErrors.push('Fecha');
-    
-    if (validationErrors.length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-    
-    setErrors([]);
-    generateReport();
-  }, [formData, generateReport]);
-
-  const inputClass = (field) => `w-full p-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-    errors.includes(field) ? 'border-red-300 bg-red-50' : 'border-gray-300'
-  }`;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
-        
-        <div className="bg-blue-600 text-white p-3 rounded-t-xl flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center">
-            <button onClick={onBack} className="mr-2 p-1 hover:bg-blue-700 rounded-full transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h2 className="text-base font-semibold">Antidoping</h2>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          <ValidationAlert errors={errors} />
-          
-          {/* Información del Paciente */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 className="text-xs font-semibold text-blue-900 mb-2">Paciente Seleccionado</h3>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-gray-900">{selectedPatient?.nombre}</p>
-              <div className="flex gap-3 text-xs text-gray-600">
-                <span>Exp: {selectedPatient?.numeroExpediente || 'N/A'}</span>
-                {selectedPatient?.edad && <span>Edad: {selectedPatient.edad} años</span>}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Fecha *</label>
-              <input
-                type="date"
-                value={formData.fecha || ''}
-                onChange={(e) => handleChange('fecha', e.target.value)}
-                className={inputClass('Fecha')}
-              />
-            </div>
-
-            <div className="border-t pt-3 mt-2">
-              <h3 className="text-xs font-semibold text-gray-800 mb-2">Pruebas de Drogas</h3>
-              <div className="space-y-2">
-                {DRUG_TESTS.map((test) => (
-                  <DrugTestRow
-                    key={test.key}
-                    test={test}
-                    value={formData[test.key] || 'NEGATIVA'}
-                    onChange={handleChange}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t p-3 flex-shrink-0">
-          <button
-            onClick={handleGenerateReport}
-            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Vista Previa del Reporte
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AntidopingReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, isSaving }) => {
+// Componente de Vista Previa del Reporte
+const BiometriaReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, isSaving }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString + 'T00:00:00');
@@ -257,7 +122,7 @@ const AntidopingReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, i
               {/* Título */}
               <div className="text-center py-2">
                 <div className="bg-blue-600 text-white py-2 px-4 rounded-lg inline-block">
-                  <h2 className="text-sm print:text-xs font-bold">PERFIL DE DROGAS DE ABUSO 6</h2>
+                  <h2 className="text-sm print:text-xs font-bold">BIOMETRÍA HEMÁTICA COMPLETA</h2>
                 </div>
               </div>
 
@@ -268,26 +133,27 @@ const AntidopingReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, i
                     <tr>
                       <th className="px-4 py-3 print:px-3 print:py-2 text-left font-bold text-gray-700 border-r border-gray-300">PRUEBA</th>
                       <th className="px-4 py-3 print:px-3 print:py-2 text-center font-bold text-gray-700 border-r border-gray-300">RESULTADO</th>
+                      <th className="px-4 py-3 print:px-3 print:py-2 text-center font-bold text-gray-700 border-r border-gray-300">UNIDAD</th>
                       <th className="px-4 py-3 print:px-3 print:py-2 text-left font-bold text-gray-700">VALORES REF.</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white">
-                    {DRUG_TESTS.map((test) => {
-                      const result = formData[test.key] || 'NEGATIVA';
+                    {BIOMETRIA_TESTS.map((test) => {
+                      const valor = formData[test.key];
+                      if (!valor || valor.trim() === '') return null;
+
                       return (
                         <tr key={test.key} className="border-t border-gray-200">
                           <td className="px-4 py-3 print:px-3 print:py-2 text-gray-700 border-r border-gray-300">{test.label}</td>
                           <td className="px-4 py-3 print:px-3 print:py-2 text-center border-r border-gray-300">
-                            <span className={`font-bold px-2 py-1 rounded text-xs inline-block ${
-                              result === 'POSITIVA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                            }`}>
-                              {result}
-                            </span>
+                            <span className="font-bold text-gray-800">{valor}</span>
+                          </td>
+                          <td className="px-4 py-3 print:px-3 print:py-2 text-center border-r border-gray-300 text-gray-600">
+                            {test.unidad}
                           </td>
                           <td className="px-4 py-3 print:px-3 print:py-2 text-gray-700">
                             <div className="text-xs print:text-[10px] leading-tight">
-                              <p>NEG: &lt;150 ng/ml</p>
-                              <p>POS: ≥150 ng/ml</p>
+                              {test.referencia}
                             </div>
                           </td>
                         </tr>
@@ -297,16 +163,24 @@ const AntidopingReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, i
                 </table>
               </div>
 
+              {/* Observaciones */}
+              {formData.observaciones && (
+                <div className="bg-yellow-50 print:bg-yellow-100 border border-yellow-300 rounded-lg p-3">
+                  <p className="text-sm print:text-xs font-bold text-gray-700 mb-1">OBSERVACIONES:</p>
+                  <p className="text-xs print:text-[10px] text-gray-600">{formData.observaciones}</p>
+                </div>
+              )}
+
               {/* Método */}
               <div className="bg-blue-50 print:bg-blue-100 rounded-lg p-3">
                 <div className="flex items-center justify-between text-sm print:text-xs gap-4">
                   <div>
                     <span className="font-bold text-gray-700">TÉCNICA:</span>
-                    <span className="ml-2 text-gray-600">RIA</span>
+                    <span className="ml-2 text-gray-600">Automatizado</span>
                   </div>
                   <div>
                     <span className="font-bold text-gray-700">MÉTODO:</span>
-                    <span className="ml-2 text-gray-600">Inmunocromatografía</span>
+                    <span className="ml-2 text-gray-600">Citometría de flujo</span>
                   </div>
                 </div>
               </div>
@@ -345,33 +219,25 @@ const AntidopingReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, i
   );
 };
 
-const AntidopingComponent = ({ onBack, pruebaData }) => {
+// Componente principal
+const BiometriaHematicaModal = ({ onClose, onSave, pruebaData }) => {
   const [showPatientSearch, setShowPatientSearch] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [currentView, setCurrentView] = useState('search'); // 'search', 'form', 'report'
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     pacienteId: '',
-    nombre: '',
-    numeroExpediente: '',
-    edad: '',
     fecha: new Date().toISOString().split('T')[0],
-    canabinoides: 'NEGATIVA',
-    cocaina: 'NEGATIVA',
-    anfetaminas: 'NEGATIVA',
-    metanfetaminas: 'NEGATIVA',
-    morfina: 'NEGATIVA',
-    benzodiazepinas: 'NEGATIVA'
+    observaciones: '',
+    ...BIOMETRIA_TESTS.reduce((acc, test) => ({ ...acc, [test.key]: '' }), {})
   });
+  const [errors, setErrors] = useState([]);
 
   const handlePatientSelect = useCallback((patient) => {
     setSelectedPatient(patient);
     setFormData(prev => ({
       ...prev,
-      pacienteId: patient._id,
-      nombre: patient.nombre,
-      numeroExpediente: patient.numeroExpediente,
-      edad: patient.edad
+      pacienteId: patient._id
     }));
     setShowPatientSearch(false);
     setCurrentView('form');
@@ -379,64 +245,95 @@ const AntidopingComponent = ({ onBack, pruebaData }) => {
 
   const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+    if (errors.length > 0) setErrors([]);
+  }, [errors.length]);
 
-  const generateReport = useCallback(() => {
+  const validateForm = () => {
+    const validationErrors = [];
+    
+    if (!formData.fecha) {
+      validationErrors.push('Fecha de realización');
+    }
+
+    // Validar que al menos un valor esté lleno
+    const hasAnyValue = BIOMETRIA_TESTS.some(test => formData[test.key]?.trim());
+    if (!hasAnyValue) {
+      validationErrors.push('Al menos un resultado de análisis');
+    }
+
+    return validationErrors;
+  };
+
+  const handleGenerateReport = () => {
+    const validationErrors = validateForm();
+    
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setErrors([]);
     setCurrentView('report');
-  }, []);
+  };
 
   const handleSaveAndPrint = async () => {
     setIsSaving(true);
+
     try {
-      // Obtener las subpruebas de la prueba para usar sus IDs reales
+      // Preparar resultados en el formato correcto
       let resultados = [];
-      
+
       if (pruebaData?.subPruebas && pruebaData.subPruebas.length > 0) {
-        // Si tenemos subpruebas, usamos sus IDs reales
-        resultados = DRUG_TESTS.map((test, index) => {
-          const subPrueba = pruebaData.subPruebas[index] || pruebaData.subPruebas[0];
+        // Usar los IDs reales de las subpruebas si existen
+        resultados = BIOMETRIA_TESTS.map((test, index) => {
+          const valor = formData[test.key];
+          if (!valor || valor.trim() === '') return null;
+
+          const subPrueba = pruebaData.subPruebas.find(sp => 
+            sp.nombre.toLowerCase().includes(test.label.toLowerCase())
+          ) || pruebaData.subPruebas[index % pruebaData.subPruebas.length];
+
           return {
-            subPruebaId: subPrueba?._id || null,
+            subPruebaId: subPrueba?._id,
             clave: test.key.toUpperCase(),
             nombre: test.label,
-            valor: formData[test.key] || 'NEGATIVA',
-            unidad: '',
-            referencia: 'NEG: <150 ng/ml, POS: ≥150 ng/ml'
+            valor: valor,
+            unidad: test.unidad,
+            referencia: test.referencia
           };
-        });
+        }).filter(Boolean);
       } else {
-        // Si no hay subpruebas definidas, crear resultados sin subPruebaId
-        resultados = DRUG_TESTS.map((test) => ({
-          clave: test.key.toUpperCase(),
-          nombre: test.label,
-          valor: formData[test.key] || 'NEGATIVA',
-          unidad: '',
-          referencia: 'NEG: <150 ng/ml, POS: ≥150 ng/ml'
-        }));
+        // Si no hay subpruebas, crear sin subPruebaId
+        resultados = BIOMETRIA_TESTS.map(test => {
+          const valor = formData[test.key];
+          if (!valor || valor.trim() === '') return null;
+
+          return {
+            clave: test.key.toUpperCase(),
+            nombre: test.label,
+            valor: valor,
+            unidad: test.unidad,
+            referencia: test.referencia
+          };
+        }).filter(Boolean);
       }
 
-      // Preparar datos para la API
+      // Preparar datos del reporte
       const reportData = {
         pacienteId: formData.pacienteId,
         pruebaId: pruebaData?._id,
         fechaRealizacion: formData.fecha,
         resultados: resultados,
-        observaciones: 'Perfil de drogas de abuso 6',
+        observaciones: formData.observaciones || '',
         estado: 'completado',
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
-      // Guardar en BD
-      await reportesAPI.create(reportData);
-      alert('Reporte guardado exitosamente');
-      
-      // Cerrar modal después de guardar
-      setTimeout(() => {
-        onBack();
-      }, 1000);
+      // Llamar a la función onSave del componente padre
+      await onSave(reportData);
       
     } catch (error) {
-      console.error('Error al guardar el reporte:', error);
+      console.error('Error al guardar:', error);
       alert('Error al guardar el reporte: ' + error.message);
     } finally {
       setIsSaving(false);
@@ -447,7 +344,7 @@ const AntidopingComponent = ({ onBack, pruebaData }) => {
   if (showPatientSearch && currentView === 'search') {
     return (
       <PatientSearchModal
-        onClose={onBack}
+        onClose={onClose}
         onSelectPatient={handlePatientSelect}
       />
     );
@@ -456,7 +353,7 @@ const AntidopingComponent = ({ onBack, pruebaData }) => {
   // Si estamos en la vista de reporte (PDF)
   if (currentView === 'report') {
     return (
-      <AntidopingReport 
+      <BiometriaReport
         formData={formData}
         selectedPatient={selectedPatient}
         onBack={() => setCurrentView('form')}
@@ -468,14 +365,125 @@ const AntidopingComponent = ({ onBack, pruebaData }) => {
 
   // Vista de formulario
   return (
-    <AntidopingForm 
-      formData={formData}
-      handleInputChange={handleInputChange}
-      onBack={onBack}
-      generateReport={generateReport}
-      selectedPatient={selectedPatient}
-    />
+    <div className="flex flex-col h-full max-h-[90vh]">
+      {/* Header */}
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b bg-blue-600 text-white rounded-t-2xl">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-blue-700 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="text-lg font-semibold">Biometría Hemática Completa</h2>
+            <p className="text-xs text-blue-100">Ingresa los resultados del análisis</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Información del Paciente */}
+      <div className="flex-shrink-0 p-4 bg-blue-50 border-b">
+        <h3 className="text-xs font-semibold text-blue-900 mb-2">Paciente Seleccionado</h3>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-gray-900">{selectedPatient?.nombre}</p>
+          <div className="flex gap-3 text-xs text-gray-600">
+            <span>Exp: {selectedPatient?.numeroExpediente || 'N/A'}</span>
+            {selectedPatient?.edad && <span>Edad: {selectedPatient.edad} años</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Form Content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {errors.length > 0 && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start mb-2">
+              <AlertCircle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+              <span className="text-red-700 font-medium text-sm">
+                Por favor completa los siguientes campos:
+              </span>
+            </div>
+            <ul className="text-xs text-red-600 list-disc list-inside ml-7">
+              {errors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {/* Fecha */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha de realización *
+            </label>
+            <input
+              type="date"
+              value={formData.fecha}
+              onChange={(e) => handleInputChange('fecha', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Resultados */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Resultados de Análisis</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {BIOMETRIA_TESTS.map((test) => (
+                <div key={test.key} className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-700">
+                    {test.label}
+                    <span className="text-gray-500 text-[10px] ml-1">({test.unidad})</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[test.key]}
+                    onChange={(e) => handleInputChange(test.key, e.target.value)}
+                    placeholder={test.referencia}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-gray-500">
+                    Ref: {test.referencia}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Observaciones */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Observaciones (opcional)
+            </label>
+            <textarea
+              value={formData.observaciones}
+              onChange={(e) => handleInputChange('observaciones', e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Ingresa observaciones adicionales..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer con botones */}
+      <div className="flex-shrink-0 flex items-center justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-2xl">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleGenerateReport}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Vista Previa del Reporte
+        </button>
+      </div>
+    </div>
   );
 };
 
-export default AntidopingComponent;
+export default BiometriaHematicaModal;

@@ -3,6 +3,8 @@ import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, Ale
 import UniversalNav from './UniversalNav';
 import AntidopingComponent from './AntidopingComponent';
 import AlcoholimetroComponent from './AlcoholimetroComponent';
+import BiometriaHematicaModal from './BiometriaHematicaModal';
+import BitacoraModal from './BitacoraModal';
 import { reportesAPI, pruebasAPI } from '../services/api';
 
 const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
@@ -35,8 +37,11 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
             </div>
           ) : pruebas.length > 0 ? (
             pruebas.map((prueba) => {
-              // Solo mostrar Antidoping y Alcoholímetro por ahora (basado en código)
-              const isAvailable = prueba.codigo === 'ANTIDOPING' || prueba.codigo === 'ALCOHOLIMETRO';
+              // Determinar si la prueba está disponible basándose en el código
+              const isAvailable = 
+                prueba.codigo === 'ANTIDOPING' || 
+                prueba.codigo === 'ALCOHOLIMETRO' ||
+                prueba.codigo === 'HEM-BIOM689'; // Biometría Hemática
               
               return (
                 <button
@@ -133,6 +138,7 @@ const ReportRow = ({ report, onView, onEdit, onDownload, onDelete }) => {
 const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showTestSelection, setShowTestSelection] = useState(false);
+  const [showBitacora, setShowBitacora] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [selectedPrueba, setSelectedPrueba] = useState(null);
   
@@ -157,10 +163,10 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     try {
       const response = await reportesAPI.getAll({ 
         page: currentPage, 
-        limit: 10 
+        limit: 10,
+        estado: 'completado' // Solo mostrar reportes completados (no cancelados)
       });
       
-      // La API devuelve: { success, data, pagination }
       setReports(response.data || []);
       setTotalPages(response.pagination?.pages || 1);
       setTotalReports(response.pagination?.total || 0);
@@ -173,7 +179,7 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     }
   };
 
-  // Cargar pruebas cuando se abre el modal
+  // Cargar pruebas y abrir modal de selección
   const handleOpenTestSelection = async () => {
     setShowTestSelection(true);
     setIsLoadingPruebas(true);
@@ -205,6 +211,8 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       setActiveModal('antidoping');
     } else if (prueba.codigo === 'ALCOHOLIMETRO') {
       setActiveModal('alcoholimetro');
+    } else if (prueba.codigo === 'HEM-BIOM689') {
+      setActiveModal('biometria');
     }
   }, []);
 
@@ -213,6 +221,26 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     setSelectedPrueba(null);
     // Recargar reportes después de cerrar el modal
     fetchReportes();
+  };
+
+  // Handler genérico para guardar reportes (usado por BiometriaHematica)
+  const handleSaveReport = async (reportData) => {
+    try {
+      // BiometriaHematica ya viene con la estructura correcta desde su modal
+      // Solo necesitamos agregar el pacienteId si no está presente
+      const completeReportData = {
+        ...reportData,
+        // Asegurarse de que todos los campos necesarios estén presentes
+        estado: reportData.estado || 'completado'
+      };
+
+      await reportesAPI.create(completeReportData);
+      alert('Reporte guardado exitosamente');
+      closeModal();
+    } catch (error) {
+      console.error('Error al guardar reporte:', error);
+      alert('Error al guardar el reporte: ' + error.message);
+    }
   };
 
   const handleView = (report) => {
@@ -235,8 +263,8 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este reporte?')) {
       try {
         await reportesAPI.delete(report._id);
-        // Recargar reportes después de eliminar
         fetchReportes();
+        alert('Reporte eliminado exitosamente');
       } catch (err) {
         console.error('Error al eliminar reporte:', err);
         alert('Error al eliminar el reporte: ' + err.message);
@@ -278,7 +306,7 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {console.log('Abrir bitácora')}}
+                onClick={() => setShowBitacora(true)}
                 className="flex items-center gap-2 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors text-sm font-medium font-poppins"
               >
                 <BookOpen className="w-4 h-4" />
@@ -420,6 +448,11 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         />
       )}
 
+      {/* Bitácora Modal */}
+      {showBitacora && (
+        <BitacoraModal onClose={() => setShowBitacora(false)} />
+      )}
+
       {/* Test Form Modals */}
       {activeModal && (
         <div className="fixed inset-0 z-50 overflow-hidden">
@@ -444,6 +477,14 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
                   <AlcoholimetroComponent 
                     onBack={closeModal}
                     pruebaData={selectedPrueba}
+                  />
+                )}
+                {activeModal === 'biometria' && (
+                  <BiometriaHematicaModal
+                    onClose={closeModal}
+                    onSave={handleSaveReport}
+                    pruebaData={selectedPrueba}
+                    initialData={null}
                   />
                 )}
               </div>
