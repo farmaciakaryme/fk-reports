@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ArrowLeft, Download, AlertCircle, Save } from 'lucide-react';
+import { ArrowLeft, Printer, AlertCircle } from 'lucide-react';
 import PatientSearchModal from './PatientSearchModal';
 import { reportesAPI } from '../services/api';
 
@@ -7,12 +7,12 @@ const ValidationAlert = ({ errors }) => {
   if (errors.length === 0) return null;
   
   return (
-    <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-md text-sm">
-      <div className="flex items-start mb-1.5">
-        <AlertCircle className="w-4 h-4 text-red-500 mr-1.5 flex-shrink-0 mt-0.5" />
-        <span className="text-red-700 font-medium">Completa los siguientes campos:</span>
+    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+      <div className="flex items-start mb-2">
+        <AlertCircle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+        <span className="text-red-700 font-medium text-sm font-inter">Completa los siguientes campos:</span>
       </div>
-      <ul className="text-xs text-red-600 list-disc list-inside ml-5">
+      <ul className="text-sm text-red-600 list-disc list-inside ml-7 font-inter">
         {errors.map((error, index) => (
           <li key={index}>{error}</li>
         ))}
@@ -21,345 +21,11 @@ const ValidationAlert = ({ errors }) => {
   );
 };
 
-const AlcoholimetroForm = ({ formData, handleInputChange, onBack, generateReport, selectedPatient }) => {
-  const [errors, setErrors] = useState([]);
-
-  const handleChange = useCallback((field, value) => {
-    handleInputChange(field, value);
-    if (errors.length > 0) setErrors([]);
-  }, [handleInputChange, errors.length]);
-
-  const handleAlcoholChange = useCallback((value) => {
-    handleInputChange('alcohol', value);
-    if (value === 'NEGATIVA') {
-      handleInputChange('gradosAlcohol', '0.0');
-    }
-  }, [handleInputChange]);
-
-  const handleGradosAlcoholChange = useCallback((value) => {
-    handleInputChange('gradosAlcohol', value);
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      handleInputChange('alcohol', numValue > 0.0 ? 'POSITIVA' : 'NEGATIVA');
-    }
-  }, [handleInputChange]);
-
-  const handleGenerateReport = useCallback(() => {
-    const validationErrors = [];
-    if (!formData.fecha) validationErrors.push('Fecha');
-    
-    if (validationErrors.length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-    
-    setErrors([]);
-    generateReport();
-  }, [formData, generateReport]);
-
-  const inputClass = (field) => `w-full p-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-    errors.includes(field) ? 'border-red-300 bg-red-50' : 'border-gray-300'
-  }`;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[75vh]">
-        
-        <div className="bg-blue-600 text-white p-3 rounded-t-xl flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center">
-            <button onClick={onBack} className="mr-2 p-1 hover:bg-blue-700 rounded-full transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h2 className="text-base font-semibold">Alcoholímetro</h2>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          <ValidationAlert errors={errors} />
-          
-          {/* Información del Paciente */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 className="text-xs font-semibold text-blue-900 mb-2">Paciente Seleccionado</h3>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-gray-900">{selectedPatient?.nombre}</p>
-              <div className="flex gap-3 text-xs text-gray-600">
-                <span>Exp: {selectedPatient?.numeroExpediente || 'N/A'}</span>
-                <span>Edad: {selectedPatient?.edad || 'N/A'} años</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Fecha *</label>
-              <input
-                type="date"
-                value={formData.fecha || ''}
-                onChange={(e) => handleChange('fecha', e.target.value)}
-                className={inputClass('Fecha')}
-              />
-            </div>
-
-            <div className="border-t pt-3 mt-2">
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Grados de Alcohol (mg/L)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.gradosAlcohol || ''}
-                  onChange={(e) => handleGradosAlcoholChange(e.target.value)}
-                  className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.0"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Valores &gt; 0.1 mg/L se consideran positivos
-                </p>
-              </div>
-
-              <h3 className="text-xs font-semibold text-gray-800 mb-2">Resultado de Alcohol</h3>
-              
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
-                <div className="mb-1.5">
-                  <span className="font-medium text-gray-800 text-xs">GRADOS DE ALCOHOL</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleAlcoholChange('NEGATIVA')}
-                    className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                      (formData.alcohol === 'NEGATIVA' || !formData.alcohol)
-                        ? 'bg-green-500 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                    }`}
-                  >
-                    NEGATIVA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAlcoholChange('POSITIVA')}
-                    className={`px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                      formData.alcohol === 'POSITIVA'
-                        ? 'bg-red-500 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                    }`}
-                  >
-                    POSITIVA
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t p-3 flex-shrink-0">
-          <button
-            onClick={handleGenerateReport}
-            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Vista Previa del Reporte
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AlcoholimetroReport = ({ formData, selectedPatient, onBack, onSaveAndPrint, isSaving }) => {
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString + 'T00:00:00');
-    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-  };
-
-  const alcoholResult = formData.alcohol || 'NEGATIVA';
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
-        
-        {/* Header con botones - NO se imprime */}
-        <div className="flex-shrink-0 bg-gray-50 border-b p-3 print:hidden">
-          <div className="flex items-center justify-between">
-            <button 
-              onClick={onBack}
-              disabled={isSaving}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="text-sm">Volver</span>
-            </button>
-            <div className="flex gap-2">
-              <button
-                onClick={() => window.print()}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-3 py-2 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                <span className="text-sm">Imprimir</span>
-              </button>
-              <button
-                onClick={onSaveAndPrint}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">Guardando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span className="text-sm">Guardar Reporte</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Contenido del reporte - SE IMPRIME */}
-        <div className="flex-1 overflow-y-auto p-8 print:p-0">
-          <div className="max-w-4xl mx-auto bg-white print:shadow-none">
-            <div className="space-y-4 print:space-y-3">
-              
-              {/* Header */}
-              <div className="border-b-2 border-blue-600 pb-3 print:pb-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 print:w-10 print:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <div className="text-white font-bold text-xs print:text-[10px]">SALUD</div>
-                    </div>
-                    <div>
-                      <h1 className="text-lg print:text-base font-bold text-gray-800 leading-tight">"SALUD AL ALCANCE DE TODOS"</h1>
-                      <p className="text-sm print:text-xs text-gray-600">Laboratorio Médico Especializado</p>
-                    </div>
-                  </div>
-                  <div className="text-right text-sm print:text-xs text-gray-500">
-                    <p>Folio: #{Math.floor(Math.random() * 10000)}</p>
-                    <p>Fecha: {formatDate(formData.fecha)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Información del Paciente */}
-              <div className="bg-gray-50 print:bg-gray-100 rounded-lg p-4 print:p-3">
-                <h2 className="text-sm print:text-xs font-bold text-gray-800 mb-2 border-b border-gray-300 pb-1">INFORMACIÓN DEL PACIENTE</h2>
-                <div className="grid grid-cols-2 gap-3 print:gap-2 text-sm print:text-xs">
-                  <div>
-                    <span className="font-medium text-gray-600">Paciente:</span>
-                    <p className="text-gray-800 font-medium">{selectedPatient?.nombre || 'No especificado'}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Fecha:</span>
-                    <p className="text-gray-800">{formatDate(formData.fecha) || 'No especificada'}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Edad:</span>
-                    <p className="text-gray-800">{selectedPatient?.edad || 'No especificada'}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Expediente:</span>
-                    <p className="text-gray-800">{selectedPatient?.numeroExpediente || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Título */}
-              <div className="text-center py-2">
-                <div className="bg-blue-600 text-white py-2 px-4 rounded-lg inline-block">
-                  <h2 className="text-sm print:text-xs font-bold">PRUEBA DE ALCOHOL EN ALIENTO</h2>
-                </div>
-              </div>
-
-              {/* Tabla de Resultados */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm print:text-xs border-2 border-gray-300">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-3 print:px-3 print:py-2 text-left font-bold text-gray-700 border-r border-gray-300">PRUEBA DE ALCOHOL</th>
-                      <th className="px-4 py-3 print:px-3 print:py-2 text-center font-bold text-gray-700 border-r border-gray-300">RESULTADO</th>
-                      <th className="px-4 py-3 print:px-3 print:py-2 text-left font-bold text-gray-700">VALORES DE REFERENCIA</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    <tr className="border-t border-gray-200">
-                      <td className="px-4 py-3 print:px-3 print:py-2 text-gray-700 border-r border-gray-300">Grados de Alcohol</td>
-                      <td className="px-4 py-3 print:px-3 print:py-2 text-center border-r border-gray-300">
-                        <div className="space-y-1">
-                          <span className={`font-bold px-2 py-1 rounded text-xs inline-block ${
-                            alcoholResult === 'POSITIVA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {alcoholResult}
-                          </span>
-                          <div className="text-xs print:text-[10px] text-gray-600">{formData.gradosAlcohol || '0.0'} mg/L</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 print:px-3 print:py-2 text-gray-700">
-                        <div className="text-xs print:text-[10px] leading-tight">
-                          <p>POSITIVA: &gt; 0.1 mg/L</p>
-                          <p>NEGATIVA: ≤ 0.0 mg/L</p>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Método */}
-              <div className="bg-blue-50 print:bg-blue-100 rounded-lg p-3">
-                <div className="flex items-center justify-between text-sm print:text-xs gap-4">
-                  <div>
-                    <span className="font-bold text-gray-700">TÉCNICA:</span>
-                    <span className="ml-2 text-gray-600">Alcoholímetro Digital Certificado</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-gray-700">MÉTODO:</span>
-                    <span className="ml-2 text-gray-600">Espectrofotometría</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fin del informe */}
-              <div className="text-center py-2">
-                <div className="bg-gray-800 text-white py-2 px-4 rounded-lg inline-block">
-                  <p className="text-sm print:text-xs font-bold">FIN DEL INFORME</p>
-                </div>
-              </div>
-
-              {/* Espacio para firma */}
-              <div className="h-16 print:h-12"></div>
-
-              {/* Firma */}
-              <div className="border-t-2 border-gray-300 pt-4 print:pt-3">
-                <div className="text-center space-y-1">
-                  <p className="text-sm print:text-xs font-bold text-gray-800">ATENTAMENTE</p>
-                  <p className="text-sm print:text-xs font-bold text-gray-800">Q.F.B ELIUTH GARCIA CRUZ</p>
-                  <p className="text-xs print:text-[10px] text-gray-600">CED.PROF. 4362774</p>
-                  <p className="text-xs print:text-[10px] text-gray-600">MEDICINA GENERAL: FLEBOLOGIA, AUDIOLOGIA</p>
-                  <p className="text-xs print:text-[10px] text-gray-600">Av República del Salvador S/N Colonia centro Atotonilco de Tula</p>
-                  
-                  <div className="mt-2 pt-2 border-t border-gray-300">
-                    <p className="text-xs print:text-[10px] font-medium text-gray-700">Asistente Médico</p>
-                    <p className="text-xs print:text-[10px] text-gray-600">Linn Castillo - 7731333631</p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
   const [showPatientSearch, setShowPatientSearch] = useState(true);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [currentView, setCurrentView] = useState('search'); // 'search', 'form', 'report'
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState([]);
   const [formData, setFormData] = useState({
     pacienteId: '',
     nombre: '',
@@ -380,25 +46,473 @@ const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
       edad: patient.edad
     }));
     setShowPatientSearch(false);
-    setCurrentView('form');
   }, []);
 
   const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+    if (errors.length > 0) setErrors([]);
+  }, [errors.length]);
 
-  const generateReport = useCallback(() => {
-    setCurrentView('report');
-  }, []);
+  const handleAlcoholChange = useCallback((value) => {
+    setFormData(prev => ({
+      ...prev,
+      alcohol: value,
+      gradosAlcohol: value === 'NEGATIVA' ? '0.0' : prev.gradosAlcohol
+    }));
+    if (errors.length > 0) setErrors([]);
+  }, [errors.length]);
 
-  const handleSaveAndPrint = async () => {
+  const handleGradosAlcoholChange = useCallback((value) => {
+    const numValue = parseFloat(value);
+    setFormData(prev => ({
+      ...prev,
+      gradosAlcohol: value,
+      alcohol: !isNaN(numValue) && numValue > 0.0 ? 'POSITIVA' : 'NEGATIVA'
+    }));
+    if (errors.length > 0) setErrors([]);
+  }, [errors.length]);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString + 'T00:00:00');
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
+  const generarHTMLReporte = () => {
+    const alcoholResult = formData.alcohol || 'NEGATIVA';
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reporte Alcoholímetro - ${selectedPatient?.nombre}</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+
+          body {
+            font-family: Arial, sans-serif;
+            background: white;
+            padding: 20px;
+          }
+
+          .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: white;
+            padding: 20mm;
+          }
+
+          .header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #2563eb;
+          }
+
+          .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+          }
+
+          .logo-section {
+            display: flex;
+            align-items: start;
+            gap: 15px;
+          }
+
+          .logo-circle {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+
+          .logo-text {
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+            text-align: center;
+          }
+
+          .company-info h1 {
+            font-size: 18px;
+            color: #1e293b;
+            margin-bottom: 4px;
+          }
+
+          .company-info p {
+            font-size: 12px;
+            color: #64748b;
+          }
+
+          .folio-info {
+            text-align: right;
+            font-size: 11px;
+            color: #64748b;
+          }
+
+          .folio-info p {
+            margin-bottom: 4px;
+          }
+
+          .patient-info {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+          }
+
+          .patient-info h2 {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #cbd5e1;
+          }
+
+          .patient-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            font-size: 11px;
+          }
+
+          .patient-field label {
+            display: block;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 2px;
+          }
+
+          .patient-field p {
+            color: #1e293b;
+            font-weight: 500;
+          }
+
+          .title-section {
+            text-align: center;
+            margin: 25px 0;
+          }
+
+          .title-box {
+            background: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            display: inline-block;
+          }
+
+          .title-box h2 {
+            font-size: 14px;
+            font-weight: bold;
+          }
+
+          .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-bottom: 20px;
+          }
+
+          .results-table th {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            color: #1e293b;
+          }
+
+          .results-table td {
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            color: #475569;
+          }
+
+          .result-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 10px;
+          }
+
+          .result-negativa {
+            background-color: #dcfce7;
+            color: #15803d;
+          }
+
+          .result-positiva {
+            background-color: #fee2e2;
+            color: #b91c1c;
+          }
+
+          .method-section {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            font-size: 11px;
+          }
+
+          .method-item {
+            text-align: center;
+          }
+
+          .method-item strong {
+            color: #1e293b;
+            font-weight: bold;
+          }
+
+          .method-item span {
+            color: #64748b;
+            margin-left: 8px;
+          }
+
+          .end-section {
+            text-align: center;
+            margin: 25px 0;
+          }
+
+          .end-box {
+            background: #1e293b;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 8px;
+            display: inline-block;
+          }
+
+          .end-box p {
+            font-size: 12px;
+            font-weight: bold;
+          }
+
+          .signature-section {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+          }
+
+          .signature-section p {
+            margin-bottom: 6px;
+            font-size: 11px;
+          }
+
+          .signature-name {
+            font-weight: bold;
+            color: #1e293b;
+            font-size: 12px;
+          }
+
+          .signature-credential {
+            color: #64748b;
+            font-size: 10px;
+          }
+
+          .assistant-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+          }
+
+          .assistant-section p {
+            font-size: 10px;
+            color: #64748b;
+          }
+
+          .assistant-name {
+            font-weight: 600;
+            color: #1e293b;
+          }
+
+          @media print {
+            body {
+              padding: 0;
+            }
+
+            .page {
+              margin: 0;
+              padding: 15mm;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="header">
+            <div class="header-content">
+              <div class="logo-section">
+                <div class="logo-circle">
+                  <div class="logo-text">SALUD</div>
+                </div>
+                <div class="company-info">
+                  <h1>"SALUD AL ALCANCE DE TODOS"</h1>
+                  <p>Laboratorio Médico Especializado</p>
+                </div>
+              </div>
+              <div class="folio-info">
+                <p><strong>Folio:</strong> #${Math.floor(Math.random() * 10000)}</p>
+                <p><strong>Fecha:</strong> ${formatDate(formData.fecha)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="patient-info">
+            <h2>INFORMACIÓN DEL PACIENTE</h2>
+            <div class="patient-grid">
+              <div class="patient-field">
+                <label>Paciente:</label>
+                <p>${selectedPatient?.nombre || 'No especificado'}</p>
+              </div>
+              <div class="patient-field">
+                <label>Fecha:</label>
+                <p>${formatDate(formData.fecha) || 'No especificada'}</p>
+              </div>
+              <div class="patient-field">
+                <label>Edad:</label>
+                <p>${selectedPatient?.edad || 'No especificada'}</p>
+              </div>
+              <div class="patient-field">
+                <label>Expediente:</label>
+                <p>${selectedPatient?.numeroExpediente || 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="title-section">
+            <div class="title-box">
+              <h2>PRUEBA DE ALCOHOL EN ALIENTO</h2>
+            </div>
+          </div>
+
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th style="width: 35%;">PRUEBA DE ALCOHOL</th>
+                <th style="width: 25%; text-align: center;">RESULTADO</th>
+                <th style="width: 40%;">VALORES DE REFERENCIA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Grados de Alcohol</td>
+                <td style="text-align: center;">
+                  <div>
+                    <span class="result-badge result-${alcoholResult.toLowerCase()}">${alcoholResult}</span>
+                    <div style="font-size: 10px; color: #64748b; margin-top: 4px;">${formData.gradosAlcohol || '0.0'} mg/L</div>
+                  </div>
+                </td>
+                <td>
+                  <div style="font-size: 10px; line-height: 1.4;">
+                    POSITIVA: &gt; 0.1 mg/L<br>
+                    NEGATIVA: ≤ 0.0 mg/L
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="method-section">
+            <div class="method-item">
+              <strong>TÉCNICA:</strong>
+              <span>Alcoholímetro Digital Certificado</span>
+            </div>
+            <div class="method-item">
+              <strong>MÉTODO:</strong>
+              <span>Espectrofotometría</span>
+            </div>
+          </div>
+
+          <div class="end-section">
+            <div class="end-box">
+              <p>FIN DEL INFORME</p>
+            </div>
+          </div>
+
+          <div class="signature-section">
+            <p style="font-weight: bold; margin-bottom: 10px;">ATENTAMENTE</p>
+            <p class="signature-name">Q.F.B ELIUTH GARCIA CRUZ</p>
+            <p class="signature-credential">CED.PROF. 4362774</p>
+            <p class="signature-credential">MEDICINA GENERAL: FLEBOLOGIA, AUDIOLOGIA</p>
+            <p class="signature-credential">Av República del Salvador S/N Colonia centro Atotonilco de Tula</p>
+            
+            <div class="assistant-section">
+              <p class="assistant-name">Asistente Médico</p>
+              <p>Linn Castillo - 7731333631</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  const handlePrintAndSave = async () => {
+    const validationErrors = [];
+    if (!formData.fecha) validationErrors.push('Fecha');
+    
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     setIsSaving(true);
+    
     try {
-      // Preparar resultados
+      // Primero imprimir
+      const contenidoHTML = generarHTMLReporte();
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      
+      document.body.appendChild(iframe);
+      
+      const iframeDoc = iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(contenidoHTML);
+      iframeDoc.close();
+      
+      iframe.onload = () => {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            
+            setTimeout(() => {
+              document.body.removeChild(iframe);
+            }, 100);
+          } catch (error) {
+            console.error('Error al imprimir:', error);
+            document.body.removeChild(iframe);
+          }
+        }, 250);
+      };
+
+      // Luego guardar en BD
       let resultados = [];
       
       if (pruebaData?.subPruebas && pruebaData.subPruebas.length > 0) {
-        // Si tenemos subpruebas, usamos el ID real de la primera
         resultados = [{
           subPruebaId: pruebaData.subPruebas[0]._id,
           clave: 'ALCOHOL',
@@ -409,7 +523,6 @@ const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
           valorNumerico: parseFloat(formData.gradosAlcohol) || 0.0
         }];
       } else {
-        // Si no hay subpruebas definidas, crear resultado sin subPruebaId
         resultados = [{
           clave: 'ALCOHOL',
           nombre: 'Grados de Alcohol',
@@ -420,7 +533,6 @@ const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
         }];
       }
 
-      // Preparar datos para la API
       const reportData = {
         pacienteId: formData.pacienteId,
         pruebaId: pruebaData?._id,
@@ -431,11 +543,9 @@ const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
-      // Guardar en BD
       await reportesAPI.create(reportData);
       alert('Reporte guardado exitosamente');
       
-      // Cerrar modal después de guardar
       setTimeout(() => {
         onBack();
       }, 1000);
@@ -448,8 +558,7 @@ const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
     }
   };
 
-  // Si estamos en la vista de búsqueda de paciente
-  if (showPatientSearch && currentView === 'search') {
+  if (showPatientSearch) {
     return (
       <PatientSearchModal
         onClose={onBack}
@@ -458,28 +567,274 @@ const AlcoholimetroComponent = ({ onBack, pruebaData }) => {
     );
   }
 
-  // Si estamos en la vista de reporte (PDF)
-  if (currentView === 'report') {
-    return (
-      <AlcoholimetroReport 
-        formData={formData}
-        selectedPatient={selectedPatient}
-        onBack={() => setCurrentView('form')}
-        onSaveAndPrint={handleSaveAndPrint}
-        isSaving={isSaving}
-      />
-    );
-  }
+  const inputClass = (field) => `w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-inter ${
+    errors.includes(field) ? 'border-red-300 bg-red-50' : 'border-gray-300'
+  }`;
 
-  // Vista de formulario
+  const alcoholResult = formData.alcohol || 'NEGATIVA';
+
   return (
-    <AlcoholimetroForm 
-      formData={formData}
-      handleInputChange={handleInputChange}
-      onBack={onBack}
-      generateReport={generateReport}
-      selectedPatient={selectedPatient}
-    />
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={onBack}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-500" />
+            </button>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 font-poppins">
+                Reporte Alcoholímetro
+              </h2>
+              <p className="text-sm text-gray-600 font-inter">
+                Completa la información y revisa la vista previa
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handlePrintAndSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium font-poppins disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Guardando...</span>
+              </>
+            ) : (
+              <>
+                <Printer className="w-4 h-4" />
+                <span>Guardar e Imprimir</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Contenido Principal */}
+        <div className="flex-1 overflow-hidden flex">
+          
+          {/* Formulario - Lado Izquierdo */}
+          <div className="w-1/3 border-r overflow-y-auto p-4 bg-gray-50">
+            <ValidationAlert errors={errors} />
+            
+            {/* Información del Paciente */}
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-blue-900 mb-3 font-poppins">Paciente Seleccionado</h3>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-900 font-inter">{selectedPatient?.nombre}</p>
+                <div className="flex gap-4 text-sm text-gray-600 font-inter">
+                  <span>Exp: {selectedPatient?.numeroExpediente || 'N/A'}</span>
+                  {selectedPatient?.edad && <span>Edad: {selectedPatient.edad} años</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Fecha */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2 font-inter">
+                Fecha de Realización *
+              </label>
+              <input
+                type="date"
+                value={formData.fecha || ''}
+                onChange={(e) => handleInputChange('fecha', e.target.value)}
+                className={inputClass('Fecha')}
+              />
+            </div>
+
+            {/* Grados de Alcohol */}
+            <div className="border-t pt-4">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2 font-inter">
+                  Grados de Alcohol (mg/L)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.gradosAlcohol || ''}
+                  onChange={(e) => handleGradosAlcoholChange(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-inter"
+                  placeholder="0.0"
+                />
+                <p className="text-xs text-gray-500 mt-1 font-inter">
+                  Valores &gt; 0.1 mg/L se consideran positivos
+                </p>
+              </div>
+
+              {/* Resultado de Alcohol */}
+              <h3 className="text-sm font-semibold text-gray-800 mb-3 font-poppins">Resultado de Alcohol</h3>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="mb-2">
+                  <span className="font-medium text-gray-800 text-sm font-inter">GRADOS DE ALCOHOL</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAlcoholChange('NEGATIVA')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors font-inter ${
+                      alcoholResult === 'NEGATIVA'
+                        ? 'bg-green-500 text-white shadow-sm'
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                    }`}
+                  >
+                    NEGATIVA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAlcoholChange('POSITIVA')}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors font-inter ${
+                      alcoholResult === 'POSITIVA'
+                        ? 'bg-red-500 text-white shadow-sm'
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                    }`}
+                  >
+                    POSITIVA
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Vista Previa - Lado Derecho */}
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-100">
+            <div className="max-w-3xl mx-auto bg-white shadow-lg rounded-lg p-8">
+              
+              {/* Header */}
+              <div className="mb-6 pb-4 border-b-4 border-blue-600">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-xs text-center leading-tight">SALUD</span>
+                    </div>
+                    <div>
+                      <h1 className="text-xl font-bold text-gray-800 font-poppins leading-tight">"SALUD AL ALCANCE DE TODOS"</h1>
+                      <p className="text-sm text-gray-600 font-inter">Laboratorio Médico Especializado</p>
+                    </div>
+                  </div>
+                  <div className="text-right text-sm text-gray-500 font-inter">
+                    <p className="mb-1"><strong>Folio:</strong> #{Math.floor(Math.random() * 10000)}</p>
+                    <p><strong>Fecha:</strong> {formatDate(formData.fecha)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información del Paciente */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                <h2 className="text-sm font-bold text-gray-800 mb-3 pb-2 border-b border-gray-300 font-poppins">
+                  INFORMACIÓN DEL PACIENTE
+                </h2>
+                <div className="grid grid-cols-2 gap-4 text-sm font-inter">
+                  <div>
+                    <span className="font-medium text-gray-600">Paciente:</span>
+                    <p className="text-gray-800 font-medium mt-0.5">{selectedPatient?.nombre || 'No especificado'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Fecha:</span>
+                    <p className="text-gray-800 mt-0.5">{formatDate(formData.fecha) || 'No especificada'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Edad:</span>
+                    <p className="text-gray-800 mt-0.5">{selectedPatient?.edad || 'No especificada'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Expediente:</span>
+                    <p className="text-gray-800 mt-0.5">{selectedPatient?.numeroExpediente || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Título */}
+              <div className="text-center my-6">
+                <div className="bg-blue-600 text-white py-3 px-6 rounded-lg inline-block">
+                  <h2 className="text-sm font-bold font-poppins">PRUEBA DE ALCOHOL EN ALIENTO</h2>
+                </div>
+              </div>
+
+              {/* Tabla de Resultados */}
+              <div className="mb-6">
+                <table className="w-full text-sm border-collapse font-inter">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-3 text-left font-bold text-gray-700 border border-gray-300">PRUEBA DE ALCOHOL</th>
+                      <th className="px-4 py-3 text-center font-bold text-gray-700 border border-gray-300">RESULTADO</th>
+                      <th className="px-4 py-3 text-left font-bold text-gray-700 border border-gray-300">VALORES DE REFERENCIA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr>
+                      <td className="px-4 py-3 text-gray-700 border border-gray-200">Grados de Alcohol</td>
+                      <td className="px-4 py-3 text-center border border-gray-200">
+                        <div className="space-y-1">
+                          <span className={`font-bold px-3 py-1 rounded text-xs inline-block ${
+                            alcoholResult === 'POSITIVA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {alcoholResult}
+                          </span>
+                          <div className="text-xs text-gray-600">{formData.gradosAlcohol || '0.0'} mg/L</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 border border-gray-200">
+                        <div className="text-xs leading-tight">
+                          <p>POSITIVA: &gt; 0.1 mg/L</p>
+                          <p>NEGATIVA: ≤ 0.0 mg/L</p>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Método */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-around text-sm font-inter">
+                  <div>
+                    <span className="font-bold text-gray-700">TÉCNICA:</span>
+                    <span className="ml-2 text-gray-600">Alcoholímetro Digital Certificado</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-gray-700">MÉTODO:</span>
+                    <span className="ml-2 text-gray-600">Espectrofotometría</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fin del informe */}
+              <div className="text-center my-6">
+                <div className="bg-gray-800 text-white py-2 px-6 rounded-lg inline-block">
+                  <p className="text-sm font-bold font-poppins">FIN DEL INFORME</p>
+                </div>
+              </div>
+
+              {/* Espacio para firma */}
+              <div className="h-16"></div>
+
+              {/* Firma */}
+              <div className="border-t-2 border-gray-300 pt-6">
+                <div className="text-center space-y-2 font-inter">
+                  <p className="text-sm font-bold text-gray-800">ATENTAMENTE</p>
+                  <p className="text-sm font-bold text-gray-800">Q.F.B ELIUTH GARCIA CRUZ</p>
+                  <p className="text-xs text-gray-600">CED.PROF. 4362774</p>
+                  <p className="text-xs text-gray-600">MEDICINA GENERAL: FLEBOLOGIA, AUDIOLOGIA</p>
+                  <p className="text-xs text-gray-600">Av República del Salvador S/N Colonia centro Atotonilco de Tula</p>
+                  
+                  <div className="mt-4 pt-4 border-t border-gray-300">
+                    <p className="text-xs font-medium text-gray-700">Asistente Médico</p>
+                    <p className="text-xs text-gray-600">Linn Castillo - 7731333631</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

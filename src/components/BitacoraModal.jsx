@@ -17,7 +17,6 @@ const BitacoraModal = ({ onClose }) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Obtener todos los reportes sin paginación
       const response = await reportesAPI.getAll({ limit: 1000 });
       setReportes(response.data || []);
     } catch (err) {
@@ -47,6 +46,43 @@ const BitacoraModal = ({ onClose }) => {
     });
   };
 
+  // Función para agrupar reportes por paciente (sin importar fecha)
+  const agruparReportesPorPaciente = (reportes) => {
+    const agrupados = {};
+    
+    reportes.forEach(reporte => {
+      const nombrePaciente = reporte.datosPaciente?.nombre || reporte.paciente?.nombre || 'N/A';
+      
+      if (!agrupados[nombrePaciente]) {
+        agrupados[nombrePaciente] = {
+          nombre: nombrePaciente,
+          edad: reporte.datosPaciente?.edad || 'N/A',
+          fecha: formatDate(reporte.fechaRealizacion),
+          hora: formatTime(reporte.createdAt || reporte.fechaRealizacion),
+          motivos: new Set(), // Usar Set para evitar duplicados
+          fechaOriginal: new Date(reporte.fechaRealizacion)
+        };
+      }
+      
+      const motivo = reporte.datosPrueba?.nombre || reporte.prueba?.nombre || 'N/A';
+      agrupados[nombrePaciente].motivos.add(motivo);
+      
+      // Actualizar con la fecha más reciente
+      const fechaActual = new Date(reporte.fechaRealizacion);
+      if (fechaActual > agrupados[nombrePaciente].fechaOriginal) {
+        agrupados[nombrePaciente].fechaOriginal = fechaActual;
+        agrupados[nombrePaciente].fecha = formatDate(reporte.fechaRealizacion);
+        agrupados[nombrePaciente].hora = formatTime(reporte.createdAt || reporte.fechaRealizacion);
+      }
+    });
+    
+    // Convertir Set a Array y ordenar por fecha más reciente
+    return Object.values(agrupados).map(grupo => ({
+      ...grupo,
+      motivos: Array.from(grupo.motivos)
+    })).sort((a, b) => a.fechaOriginal - b.fechaOriginal);
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -68,15 +104,16 @@ const BitacoraModal = ({ onClose }) => {
   };
 
   const generarVistaPrevia = (reportesFiltrados) => {
+    const reportesAgrupados = agruparReportesPorPaciente(reportesFiltrados);
     const reportesPorPagina = 20;
-    const totalPaginas = Math.ceil(reportesFiltrados.length / reportesPorPagina);
+    const totalPaginas = Math.ceil(reportesAgrupados.length / reportesPorPagina);
     
     const paginas = [];
     
     for (let pagina = 0; pagina < totalPaginas; pagina++) {
       const inicio = pagina * reportesPorPagina;
-      const fin = Math.min(inicio + reportesPorPagina, reportesFiltrados.length);
-      const reportesPagina = reportesFiltrados.slice(inicio, fin);
+      const fin = Math.min(inicio + reportesPorPagina, reportesAgrupados.length);
+      const reportesPagina = reportesAgrupados.slice(inicio, fin);
       
       paginas.push(
         <div 
@@ -123,18 +160,20 @@ const BitacoraModal = ({ onClose }) => {
                   <th className="border border-gray-300 px-2 py-2 text-left font-bold text-gray-700 font-inter w-20">HORA</th>
                   <th className="border border-gray-300 px-2 py-2 text-left font-bold text-gray-700 font-inter">NOMBRE</th>
                   <th className="border border-gray-300 px-2 py-2 text-left font-bold text-gray-700 font-inter w-16">EDAD</th>
-                  <th className="border border-gray-300 px-2 py-2 text-left font-bold text-gray-700 font-inter w-32">MOTIVO</th>
+                  <th className="border border-gray-300 px-2 py-2 text-left font-bold text-gray-700 font-inter w-40">MOTIVO</th>
                 </tr>
               </thead>
               <tbody>
                 {reportesPagina.map((reporte, index) => (
-                  <tr key={reporte._id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <tr key={`${reporte.nombre}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{inicio + index + 1}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{formatDate(reporte.fechaRealizacion)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{formatTime(reporte.createdAt || reporte.fechaRealizacion)}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 font-inter">{reporte.datosPaciente?.nombre || reporte.paciente?.nombre || 'N/A'}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{reporte.datosPaciente?.edad || 'N/A'}</td>
-                    <td className="border border-gray-200 px-2 py-1.5 font-inter text-xs">{reporte.datosPrueba?.nombre || reporte.prueba?.nombre || 'N/A'}</td>
+                    <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{reporte.fecha}</td>
+                    <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{reporte.hora}</td>
+                    <td className="border border-gray-200 px-2 py-1.5 font-inter">{reporte.nombre}</td>
+                    <td className="border border-gray-200 px-2 py-1.5 text-center font-inter">{reporte.edad}</td>
+                    <td className="border border-gray-200 px-2 py-1.5 font-inter text-xs">
+                      {reporte.motivos.join(', ')}
+                    </td>
                   </tr>
                 ))}
                 {/* Filas vacías para completar 20 */}
@@ -181,7 +220,6 @@ const BitacoraModal = ({ onClose }) => {
     const reportesFiltrados = filtrarReportes();
     const contenidoHTML = generarHTMLBitacora(reportesFiltrados);
     
-    // Crear un iframe oculto
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -192,20 +230,17 @@ const BitacoraModal = ({ onClose }) => {
     
     document.body.appendChild(iframe);
     
-    // Escribir el contenido en el iframe
     const iframeDoc = iframe.contentWindow.document;
     iframeDoc.open();
     iframeDoc.write(contenidoHTML);
     iframeDoc.close();
     
-    // Esperar a que cargue el contenido y luego imprimir
     iframe.onload = () => {
       setTimeout(() => {
         try {
           iframe.contentWindow.focus();
           iframe.contentWindow.print();
           
-          // Remover el iframe después de imprimir
           setTimeout(() => {
             document.body.removeChild(iframe);
           }, 100);
@@ -217,18 +252,19 @@ const BitacoraModal = ({ onClose }) => {
     };
   };
 
-  const generarPDF = descargarPDF; // Alias para compatibilidad
+  const generarPDF = descargarPDF;
 
   const generarHTMLBitacora = (reportesFiltrados) => {
+    const reportesAgrupados = agruparReportesPorPaciente(reportesFiltrados);
     const reportesPorPagina = 20;
-    const totalPaginas = Math.ceil(reportesFiltrados.length / reportesPorPagina);
+    const totalPaginas = Math.ceil(reportesAgrupados.length / reportesPorPagina);
     
     let paginasHTML = '';
     
     for (let pagina = 0; pagina < totalPaginas; pagina++) {
       const inicio = pagina * reportesPorPagina;
-      const fin = Math.min(inicio + reportesPorPagina, reportesFiltrados.length);
-      const reportesPagina = reportesFiltrados.slice(inicio, fin);
+      const fin = Math.min(inicio + reportesPorPagina, reportesAgrupados.length);
+      const reportesPagina = reportesAgrupados.slice(inicio, fin);
       
       paginasHTML += `
         <div class="page ${pagina < totalPaginas - 1 ? 'page-break' : ''}">
@@ -298,11 +334,11 @@ const BitacoraModal = ({ onClose }) => {
         ${reportes.map((reporte, index) => `
           <tr>
             <td class="text-center">${numeroInicial + index}</td>
-            <td class="text-center">${formatDate(reporte.fechaRealizacion)}</td>
-            <td class="text-center">${formatTime(reporte.createdAt || reporte.fechaRealizacion)}</td>
-            <td>${reporte.datosPaciente?.nombre || reporte.paciente?.nombre || 'N/A'}</td>
-            <td class="text-center">${reporte.datosPaciente?.edad || 'N/A'}</td>
-            <td>${reporte.datosPrueba?.nombre || reporte.prueba?.nombre || 'N/A'}</td>
+            <td class="text-center">${reporte.fecha}</td>
+            <td class="text-center">${reporte.hora}</td>
+            <td>${reporte.nombre}</td>
+            <td class="text-center">${reporte.edad}</td>
+            <td>${reporte.motivos.join(', ')}</td>
           </tr>
         `).join('')}
         ${generarFilasVacias(20 - reportes.length)}
@@ -450,9 +486,9 @@ const BitacoraModal = ({ onClose }) => {
     .col-nro { width: 8%; }
     .col-fecha { width: 14%; }
     .col-hora { width: 10%; }
-    .col-nombre { width: 35%; }
+    .col-nombre { width: 30%; }
     .col-edad { width: 10%; }
-    .col-motivo { width: 23%; }
+    .col-motivo { width: 28%; }
 
     .text-center {
       text-align: center;
@@ -492,6 +528,7 @@ const BitacoraModal = ({ onClose }) => {
   `;
 
   const reportesFiltrados = filtrarReportes();
+  const reportesAgrupados = agruparReportesPorPaciente(reportesFiltrados);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -545,7 +582,7 @@ const BitacoraModal = ({ onClose }) => {
             </div>
           </div>
           <div className="mt-3 text-sm text-gray-600 font-inter">
-            Mostrando {reportesFiltrados.length} reportes
+            Mostrando {reportesAgrupados.length} pacientes únicos ({reportesFiltrados.length} reportes totales)
           </div>
         </div>
 
