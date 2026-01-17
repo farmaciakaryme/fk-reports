@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+/* eslint-disable react/prop-types */
+import { useState, useCallback, useEffect } from 'react';
 import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, AlertCircle } from 'lucide-react';
-import UniversalNav from './UniversalNav';
-import AntidopingComponent from './AntidopingComponent';
-import AlcoholimetroComponent from './AlcoholimetroComponent';
-import BiometriaHematicaModal from './BiometriaHematicaModal';
+import UniversalNav from '../navigation/UniversalNav';
+import ReportGenerator from './ReportGenerator';
 import BitacoraModal from './BitacoraModal';
-import { reportesAPI, pruebasAPI } from '../services/api';
+import { reportesAPI, pruebasAPI } from '../../services/api';
 
 const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
   return (
@@ -37,11 +36,10 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
             </div>
           ) : pruebas.length > 0 ? (
             pruebas.map((prueba) => {
-              // Determinar si la prueba está disponible basándose en el código
               const isAvailable = 
                 prueba.codigo === 'ANTIDOPING' || 
                 prueba.codigo === 'ALCOHOLIMETRO' ||
-                prueba.codigo === 'HEM-BIOM689'; // Biometría Hemática
+                prueba.codigo === 'HEM-BIOM689';
               
               return (
                 <button
@@ -80,7 +78,6 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
 };
 
 const ReportRow = ({ report, onView, onEdit, onDownload, onDelete }) => {
-  // Formatear fecha
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -142,7 +139,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [activeModal, setActiveModal] = useState(null);
   const [selectedPrueba, setSelectedPrueba] = useState(null);
   
-  // Estado para datos de la API
   const [reports, setReports] = useState([]);
   const [pruebas, setPruebas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,7 +148,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalReports, setTotalReports] = useState(0);
 
-  // Cargar reportes al montar el componente
   useEffect(() => {
     fetchReportes();
   }, [currentPage]);
@@ -163,8 +158,7 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     try {
       const response = await reportesAPI.getAll({ 
         page: currentPage, 
-        limit: 10,
-        estado: 'completado' // Solo mostrar reportes completados (no cancelados)
+        limit: 10
       });
       
       setReports(response.data || []);
@@ -179,7 +173,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     }
   };
 
-  // Cargar pruebas y abrir modal de selección
   const handleOpenTestSelection = async () => {
     setShowTestSelection(true);
     setIsLoadingPruebas(true);
@@ -194,7 +187,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     }
   };
 
-  // Filtrar reportes localmente
   const filteredReports = reports.filter(report => {
     const pacienteNombre = (report.datosPaciente?.nombre || report.paciente?.nombre || '').toLowerCase();
     const folio = (report.folio || '').toLowerCase();
@@ -205,57 +197,25 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const handleSelectTest = useCallback((prueba) => {
     setShowTestSelection(false);
     setSelectedPrueba(prueba);
-    
-    // Determinar qué modal abrir según el CÓDIGO de la prueba
-    if (prueba.codigo === 'ANTIDOPING') {
-      setActiveModal('antidoping');
-    } else if (prueba.codigo === 'ALCOHOLIMETRO') {
-      setActiveModal('alcoholimetro');
-    } else if (prueba.codigo === 'HEM-BIOM689') {
-      setActiveModal('biometria');
-    }
+    setActiveModal('report');
   }, []);
 
   const closeModal = () => {
     setActiveModal(null);
     setSelectedPrueba(null);
-    // Recargar reportes después de cerrar el modal
     fetchReportes();
-  };
-
-  // Handler genérico para guardar reportes (usado por BiometriaHematica)
-  const handleSaveReport = async (reportData) => {
-    try {
-      // BiometriaHematica ya viene con la estructura correcta desde su modal
-      // Solo necesitamos agregar el pacienteId si no está presente
-      const completeReportData = {
-        ...reportData,
-        // Asegurarse de que todos los campos necesarios estén presentes
-        estado: reportData.estado || 'completado'
-      };
-
-      await reportesAPI.create(completeReportData);
-      alert('Reporte guardado exitosamente');
-      closeModal();
-    } catch (error) {
-      console.error('Error al guardar reporte:', error);
-      alert('Error al guardar el reporte: ' + error.message);
-    }
   };
 
   const handleView = (report) => {
     console.log('Ver reporte:', report);
-    // TODO: Implementar vista detallada del reporte
   };
 
   const handleEdit = (report) => {
     console.log('Editar reporte:', report);
-    // TODO: Implementar edición de reporte
   };
 
   const handleDownload = async (report) => {
     console.log('Descargar reporte:', report);
-    // TODO: Implementar descarga de PDF
     alert('Función de descarga en desarrollo');
   };
 
@@ -339,7 +299,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
             </div>
           </div>
 
-          {/* Error Message */}
           {error && (
             <div className="mb-6 flex items-center gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-lg">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -357,21 +316,11 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">
-                    Folio
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">
-                    Paciente
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">
-                    Prueba
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">
-                    Fecha
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">
-                    Acciones
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">Folio</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">Paciente</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">Prueba</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">Fecha</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider font-inter">Acciones</th>
                 </tr>
               </thead>
               <tbody className="bg-white">
@@ -429,7 +378,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
           )}
         </div>
 
-        {/* Info Box */}
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-900 font-inter">
             <strong>Conexión segura:</strong> Tus datos están protegidos con cifrado y Row Level Security (RLS). 
@@ -438,7 +386,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         </div>
       </div>
 
-      {/* Test Selection Modal */}
       {showTestSelection && (
         <TestSelectionModal
           onClose={() => setShowTestSelection(false)}
@@ -448,49 +395,15 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         />
       )}
 
-      {/* Bitácora Modal */}
       {showBitacora && (
         <BitacoraModal onClose={() => setShowBitacora(false)} />
       )}
 
-      {/* Test Form Modals */}
-      {activeModal && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
-            onClick={closeModal}
-          />
-          
-          <div className="absolute inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <div 
-                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {activeModal === 'antidoping' && (
-                  <AntidopingComponent 
-                    onBack={closeModal} 
-                    pruebaData={selectedPrueba}
-                  />
-                )}
-                {activeModal === 'alcoholimetro' && (
-                  <AlcoholimetroComponent 
-                    onBack={closeModal}
-                    pruebaData={selectedPrueba}
-                  />
-                )}
-                {activeModal === 'biometria' && (
-                  <BiometriaHematicaModal
-                    onClose={closeModal}
-                    onSave={handleSaveReport}
-                    pruebaData={selectedPrueba}
-                    initialData={null}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+      {activeModal === 'report' && (
+        <ReportGenerator
+          onBack={closeModal}
+          pruebaData={selectedPrueba}
+        />
       )}
     </div>
   );

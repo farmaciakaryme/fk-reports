@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+/* eslint-disable react/prop-types */
+import { useState } from 'react';
 import { Activity, AlertCircle, Loader2 } from 'lucide-react';
-import { authAPI } from '../services/api';
+import { authAPI } from '../../services/api';
 
 const LoginPage = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react/prop-types */
+import { useState, useEffect } from 'react';
 import { 
   FlaskConical,
   Plus,
@@ -8,8 +9,8 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import UniversalNav from './UniversalNav';
-import { pruebasAPI } from '../services/api';
+import UniversalNav from '../navigation/UniversalNav';
+import { pruebasAPI } from '../../services/api';
 
 const TestManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [tests, setTests] = useState([]);

@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+/* eslint-disable react/prop-types */
+/* eslint-disable no-useless-catch */
+import { useState, useEffect,  } from 'react';
 import { Users, Plus, Search, Eye, Edit2, Trash2, X, Loader2, AlertCircle } from 'lucide-react';
-import UniversalNav from './UniversalNav';
-import { pacientesAPI } from '../services/api';
+import UniversalNav from '../navigation/UniversalNav';
+import { pacientesAPI } from '../../services/api';
 
 // Modal de nuevo/editar paciente
 const PatientModal = ({ isOpen, onClose, onSave, patient = null }) => {

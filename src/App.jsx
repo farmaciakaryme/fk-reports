@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
-import LoginPage from './components/LoginPage';
-import Dashboard from './components/Dashboard';
-import TestManagement from './components/Test_Management';
-import ReportesManagement from './components/ReportesManagement';
-import PatientsManagement from './components/PatientsManagement';
+import { useState, useCallback } from 'react';
+import LoginPage from './components/auth/LoginPage';
+import Dashboard from './components/navigation/Dashboard';
+import TestManagement from './components/tests/TestsManagement';
+import ReportesManagement from './components/reports/ReportesManagement';
+import PatientsManagement from './components/patients/PatientsManagement';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
