@@ -179,19 +179,17 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   const [testConfig, setTestConfig] = useState(null);
   const [isLoadingTest, setIsLoadingTest] = useState(true);
 
-  // ✅ Agregar/remover clase al body cuando estamos en preview
-useEffect(() => {
-  if (currentStep === 'preview') {
-    const modalPreview = document.querySelector('.print-hide-modal .report-preview');
-    if (modalPreview) modalPreview.style.display = 'none';
-  }
+  useEffect(() => {
+    if (currentStep === 'preview') {
+      const modalPreview = document.querySelector('.print-hide-modal .report-preview');
+      if (modalPreview) modalPreview.style.display = 'none';
+    }
 
-  return () => {
-    const modalPreview = document.querySelector('.print-hide-modal .report-preview');
-    if (modalPreview) modalPreview.style.display = '';
-  };
-}, [currentStep]);
-
+    return () => {
+      const modalPreview = document.querySelector('.print-hide-modal .report-preview');
+      if (modalPreview) modalPreview.style.display = '';
+    };
+  }, [currentStep]);
 
   useEffect(() => {
     const loadTestConfig = async () => {
@@ -267,11 +265,11 @@ useEffect(() => {
     setCurrentStep('preview');
   };
 
-  // ✅ FUNCIÓN MEJORADA: Guarda y luego imprime con window.print() directo
+  // ✅ NUEVA FUNCIÓN: Imprimir usando iframe
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
-      // Guardar en base de datos
+      // 1. Guardar en base de datos
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -302,13 +300,55 @@ useEffect(() => {
 
       await reportesAPI.create(reportData);
       
-      // ✅ Pequeño delay para asegurar que el DOM esté listo
+      // 2. Obtener el HTML del reporte
+      const reportElement = document.querySelector('.report-to-print');
+      if (!reportElement) {
+        alert('Error: No se encontró el reporte');
+        return;
+      }
+
+      // 3. Crear iframe oculto
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+
+      // 4. Escribir el contenido en el iframe
+      const iframeDoc = iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Reporte Médico</title>
+            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+            <style>
+              @page { size: A4; margin: 0.5in; }
+              body { margin: 0; padding: 0; }
+              * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+            </style>
+          </head>
+          <body>
+            ${reportElement.innerHTML}
+          </body>
+        </html>
+      `);
+      iframeDoc.close();
+
+      // 5. Esperar a que cargue y luego imprimir
       setTimeout(() => {
-        window.print();
-      }, 100);
-      
-      // Volver después de imprimir
-      setTimeout(() => onBack(), 600);
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        
+        // 6. Limpiar
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          onBack();
+        }, 500);
+      }, 250);
       
     } catch (error) {
       console.error('Error al guardar:', error);
@@ -340,71 +380,44 @@ useEffect(() => {
 
   if (currentStep === 'preview') {
     return (
-      <>
-        {/* Estilos globales para impresión */}
-        <style>{`
-          @media print {
-            /* Ocultar el modal y su fondo */
-            .print-hide-modal {
-              display: none !important;
-            }
-            
-            /* Mostrar el reporte limpio */
-            .print-show-report {
-              display: block !important;
-            }
-            
-            /* Configuración de página */
-            @page {
-              size: A4;
-              margin: 0.5in;
-            }
-            
-            body {
-              margin: 0;
-              padding: 0;
-            }
-          }
-        `}</style>
-
-        {/* Modal - visible en pantalla, oculto al imprimir */}
-        <div className="print-hide-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
-            
-            {/* Header */}
-            <div className="flex-shrink-0 bg-gray-50 border-b p-3">
-              <div className="flex items-center justify-between">
-                <button 
-                  onClick={() => setCurrentStep('form')}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="text-sm">Volver</span>
-                </button>
-                
-                <button
-                  onClick={handlePrintAndSave}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm">Guardando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      <span className="text-sm">Imprimir y Guardar</span>
-                    </>
-                  )}
-                </button>
-              </div>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
+          
+          {/* Header */}
+          <div className="flex-shrink-0 bg-gray-50 border-b p-3">
+            <div className="flex items-center justify-between">
+              <button 
+                onClick={() => setCurrentStep('form')}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm">Volver</span>
+              </button>
+              
+              <button
+                onClick={handlePrintAndSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span className="text-sm">Imprimir y Guardar</span>
+                  </>
+                )}
+              </button>
             </div>
+          </div>
 
-            {/* Vista previa en el modal */}
-            <div className="flex-1 overflow-y-auto">
+          {/* Vista previa - con clase especial para capturar */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="report-to-print">
               <ReportPreview
                 testConfig={testConfig}
                 formData={formData}
@@ -413,16 +426,7 @@ useEffect(() => {
             </div>
           </div>
         </div>
-
-        {/* Contenido para impresión - oculto en pantalla, visible al imprimir */}
-        <div className="hidden print-show-report fixed inset-0 bg-white z-[9999]">
-          <ReportPreview
-            testConfig={testConfig}
-            formData={formData}
-            selectedPatient={selectedPatient}
-          />
-        </div>
-      </>
+      </div>
     );
   }
 
