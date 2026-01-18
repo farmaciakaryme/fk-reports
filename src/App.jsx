@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import LoginPage from './components/auth/LoginPage';
 import Dashboard from './components/navigation/Dashboard';
-import TestManagement from './components/tests/TestsManagement';
+import TestManagement from './components/tests/gita ';
 import ReportesManagement from './components/reports/ReportesManagement';
 import PatientsManagement from './components/patients/PatientsManagement';
 
