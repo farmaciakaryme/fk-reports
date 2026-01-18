@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // src/utils/printUtils.js
 // Función para imprimir reportes compatible con móvil y desktop
 
@@ -6,22 +7,30 @@ export const printReport = async (htmlContent, fileName = 'reporte') => {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
   if (isMobile) {
-    // MÓVIL: Abrir en nueva ventana
-    const printWindow = window.open('', '_blank');
+    // MÓVIL: Abrir en nueva ventana Y ejecutar print() inmediatamente
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
     
     if (printWindow) {
       printWindow.document.write(htmlContent);
       printWindow.document.close();
       
+      // Esperar a que se cargue completamente y luego abrir el panel de impresión
       printWindow.onload = () => {
         setTimeout(() => {
-          printWindow.print();
-        }, 500);
+          printWindow.focus(); // Enfocar la ventana
+          printWindow.print(); // Abrir panel de impresión
+          
+          // Cerrar la ventana después de imprimir o cancelar (opcional)
+          printWindow.onafterprint = () => {
+            printWindow.close();
+          };
+        }, 300); // Dar tiempo para que el contenido se renderice
       };
+      
       return true;
     } else {
-      // Si falla, descargar como HTML
-      return downloadAsHTML(htmlContent, fileName);
+      alert('Por favor, permite las ventanas emergentes para imprimir el reporte.');
+      return false;
     }
   } else {
     // DESKTOP: Usar iframe (método actual)
@@ -63,24 +72,5 @@ export const printReport = async (htmlContent, fileName = 'reporte') => {
         reject(error);
       }
     });
-  }
-};
-
-// Función auxiliar para descargar como HTML
-const downloadAsHTML = (htmlContent, fileName) => {
-  try {
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${fileName}_${new Date().getTime()}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return true;
-  } catch (error) {
-    console.error('Error al descargar:', error);
-    return false;
   }
 };
