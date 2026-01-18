@@ -729,12 +729,13 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     `;
   };
 
-const handlePrintAndSave = async () => {
+  const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
-      // ✅ CAMBIAR A VISTA DE IMPRESIÓN DIRECTA (como el alcoholímetro)
-      // En lugar de generar HTML y usar printReport(), usar window.print() directamente
-      
+      // ✅ USAR FUNCIÓN DE IMPRESIÓN COMPATIBLE CON MÓVIL
+      const contenidoHTML = generarHTMLReporte();
+      await printReport(contenidoHTML, `reporte_${testConfig?.codigo || 'laboratorio'}`);
+
       // Preparar resultados para guardar
       let resultados = [];
       
@@ -764,13 +765,9 @@ const handlePrintAndSave = async () => {
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
-      // Primero guardar el reporte
       await reportesAPI.create(reportData);
       
-      // Luego abrir el panel de impresión directamente
-      window.print();
-      
-      alert('✅ Reporte guardado exitosamente');
+     
       setTimeout(() => onBack(), 500);
       
     } catch (error) {
