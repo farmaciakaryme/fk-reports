@@ -1,63 +1,15 @@
 /* eslint-disable react/prop-types */
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
-import { reportesAPI } from '../../services/api';
-
-// Configuración de pruebas
-const TESTS_CONFIG = {
-  ANTIDOPING: {
-    nombre: 'Perfil de Drogas de Abuso 6',
-    codigo: 'ANTIDOPING',
-    fields: [
-      { key: 'canabinoides', label: 'CANABINOIDES', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' },
-      { key: 'cocaina', label: 'COCAINA', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' },
-      { key: 'anfetaminas', label: 'ANFETAMINAS', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' },
-      { key: 'metanfetaminas', label: 'METANFETAMINAS', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' },
-      { key: 'morfina', label: 'MORFINA OPIACEOS', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' },
-      { key: 'benzodiazepinas', label: 'BENZODIAZEPINAS', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' }
-    ],
-    metodo: 'Inmunocromatografía',
-    tecnica: 'RIA',
-    referencia: 'NEG: <150 ng/ml, POS: ≥150 ng/ml'
-  },
-  ALCOHOLIMETRO: {
-    nombre: 'Prueba de Alcohol en Aliento',
-    codigo: 'ALCOHOLIMETRO',
-    fields: [
-      { key: 'gradosAlcohol', label: 'Grados de Alcohol (mg/L)', type: 'number', placeholder: '0.0', step: '0.01' },
-      { key: 'resultado', label: 'Resultado', type: 'select', options: ['NEGATIVA', 'POSITIVA'], default: 'NEGATIVA' }
-    ],
-    metodo: 'Espectrofotometría',
-    tecnica: 'Alcoholímetro Digital Certificado',
-    referencia: 'POSITIVA: > 0.1 mg/L, NEGATIVA: ≤ 0.0 mg/L'
-  },
-  'HEM-BIOM689': {
-    nombre: 'Biometría Hemática Completa',
-    codigo: 'HEM-BIOM689',
-    fields: [
-      { key: 'hemoglobina', label: 'Hemoglobina', type: 'text', unidad: 'g/dL', referencia: 'H: 13.5-17.5, M: 12.0-16.0' },
-      { key: 'hematocrito', label: 'Hematocrito', type: 'text', unidad: '%', referencia: 'H: 40-54, M: 37-47' },
-      { key: 'leucocitos', label: 'Leucocitos', type: 'text', unidad: 'x10³/µL', referencia: '4.5-11.0' },
-      { key: 'eritrocitos', label: 'Eritrocitos', type: 'text', unidad: 'x10⁶/µL', referencia: 'H: 4.5-5.9, M: 4.0-5.2' },
-      { key: 'plaquetas', label: 'Plaquetas', type: 'text', unidad: 'x10³/µL', referencia: '150-400' },
-      { key: 'vcm', label: 'VCM', type: 'text', unidad: 'fL', referencia: '80-100' },
-      { key: 'hcm', label: 'HCM', type: 'text', unidad: 'pg', referencia: '27-31' },
-      { key: 'chcm', label: 'CHCM', type: 'text', unidad: 'g/dL', referencia: '32-36' },
-      { key: 'neutrofilos', label: 'Neutrófilos', type: 'text', unidad: '%', referencia: '40-70' },
-      { key: 'linfocitos', label: 'Linfocitos', type: 'text', unidad: '%', referencia: '20-40' },
-      { key: 'monocitos', label: 'Monocitos', type: 'text', unidad: '%', referencia: '2-8' },
-      { key: 'eosinofilos', label: 'Eosinófilos', type: 'text', unidad: '%', referencia: '1-4' },
-      { key: 'basofilos', label: 'Basófilos', type: 'text', unidad: '%', referencia: '0-1' }
-    ],
-    metodo: 'Citometría de flujo',
-    tecnica: 'Automatizado'
-  }
-};
+import { reportesAPI, pruebasAPI } from '../../services/api';
+import { printReport } from '../../utils/printUtils';
 
 // Componente de Formulario Dinámico
 const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }) => {
+  if (!testConfig) return null;
+
   return (
     <div className="space-y-4">
       {/* Info del paciente */}
@@ -70,7 +22,7 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }
         </div>
       </div>
 
-      {/* ⭐ Fecha Y Hora */}
+      {/* Fecha Y Hora */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
@@ -96,24 +48,33 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }
         </div>
       </div>
 
-      {/* Campos dinámicos según el tipo de prueba */}
-      {testConfig.fields.map((field) => {
+      {/* Campos dinámicos de subpruebas */}
+      {testConfig.subPruebas?.map((subPrueba) => {
+        // ✅ ESTRUCTURA REAL: valoresReferencia.opciones
+        const tieneOpciones = subPrueba.valoresReferencia?.opciones && subPrueba.valoresReferencia.opciones.length > 0;
+        const opciones = tieneOpciones 
+          ? subPrueba.valoresReferencia.opciones.map(op => op.valor)
+          : null;
+
         return (
-          <div key={field.key}>
+          <div key={subPrueba._id}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {field.label} {field.unidad && <span className="text-gray-500">({field.unidad})</span>}
+              {subPrueba.nombre}
+              {subPrueba.unidad && <span className="text-gray-500"> ({subPrueba.unidad})</span>}
             </label>
             
-            {field.type === 'select' ? (
+            {tieneOpciones ? (
               <div className="flex gap-2">
-                {field.options.map((option) => (
+                {opciones.map((option) => (
                   <button
                     key={option}
                     type="button"
-                    onClick={() => onChange(field.key, option)}
+                    onClick={() => onChange(subPrueba._id, option)}
                     className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      formData[field.key] === option
-                        ? option === 'POSITIVA' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                      formData[subPrueba._id] === option
+                        ? option === 'POSITIVA' || option === 'POSITIVO' 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-green-500 text-white'
                         : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                     }`}
                   >
@@ -121,31 +82,74 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }
                   </button>
                 ))}
               </div>
-            ) : field.type === 'number' ? (
+            ) : subPrueba.tipo === 'numerico' ? (
               <input
                 type="number"
-                step={field.step || '1'}
-                value={formData[field.key] || ''}
-                onChange={(e) => onChange(field.key, e.target.value)}
-                placeholder={field.placeholder}
+                step="0.01"
+                value={formData[subPrueba._id] || ''}
+                onChange={(e) => onChange(subPrueba._id, e.target.value)}
+                placeholder={subPrueba.valoresReferencia?.texto || ''}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             ) : (
               <input
                 type="text"
-                value={formData[field.key] || ''}
-                onChange={(e) => onChange(field.key, e.target.value)}
-                placeholder={field.referencia}
+                value={formData[subPrueba._id] || ''}
+                onChange={(e) => onChange(subPrueba._id, e.target.value)}
+                placeholder={subPrueba.valoresReferencia?.texto || ''}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             )}
             
-            {field.referencia && (
-              <p className="text-xs text-gray-500 mt-1">Ref: {field.referencia}</p>
+            {subPrueba.valoresReferencia?.texto && (
+              <p className="text-xs text-gray-500 mt-1">Ref: {subPrueba.valoresReferencia.texto}</p>
             )}
           </div>
         );
       })}
+
+      {/* Campos adicionales */}
+      {testConfig.camposAdicionales?.map((campo) => (
+        <div key={campo._id}>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {campo.nombre}
+          </label>
+          
+          {campo.tipo === 'select' && campo.opciones ? (
+            <select
+              value={formData[`campo_${campo._id}`] || ''}
+              onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar...</option>
+              {campo.opciones.map((opcion) => (
+                <option key={opcion} value={opcion}>{opcion}</option>
+              ))}
+            </select>
+          ) : campo.tipo === 'numero' ? (
+            <input
+              type="number"
+              value={formData[`campo_${campo._id}`] || ''}
+              onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          ) : campo.tipo === 'fecha' ? (
+            <input
+              type="date"
+              value={formData[`campo_${campo._id}`] || ''}
+              onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          ) : (
+            <input
+              type="text"
+              value={formData[`campo_${campo._id}`] || ''}
+              onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          )}
+        </div>
+      ))}
 
       {/* Observaciones */}
       <div>
@@ -170,21 +174,68 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [formData, setFormData] = useState({ 
     fecha: new Date().toISOString().split('T')[0],
-    hora: new Date().toTimeString().slice(0, 5) // HH:MM
+    hora: new Date().toTimeString().slice(0, 5)
   });
   const [errors, setErrors] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [testConfig, setTestConfig] = useState(null);
+  const [isLoadingTest, setIsLoadingTest] = useState(true);
 
-  const testConfig = TESTS_CONFIG[pruebaData?.codigo] || TESTS_CONFIG.ANTIDOPING;
+  // ✅ CARGAR CONFIGURACIÓN DE LA PRUEBA DESDE BD
+  useEffect(() => {
+    const loadTestConfig = async () => {
+      if (!pruebaData) {
+        setIsLoadingTest(false);
+        return;
+      }
 
-  // Inicializar valores por defecto
-  React.useEffect(() => {
-    const defaults = {};
-    testConfig.fields.forEach(field => {
-      if (field.default) defaults[field.key] = field.default;
-    });
-    setFormData(prev => ({ ...prev, ...defaults }));
-  }, [testConfig]);
+      try {
+        setIsLoadingTest(true);
+        
+        // Si pruebaData ya tiene subPruebas, usarlo directamente
+        if (pruebaData.subPruebas && pruebaData.subPruebas.length > 0) {
+          console.log('✅ Usando pruebaData directamente:', pruebaData);
+          setTestConfig(pruebaData);
+          
+          // ✅ Inicializar TODAS las subpruebas que tienen opciones
+          const defaults = {};
+          pruebaData.subPruebas.forEach(subPrueba => {
+            const tieneOpciones = subPrueba.valoresReferencia?.opciones?.length > 0;
+            if (tieneOpciones) {
+              // Usar la primera opción (que es NEGATIVA según tu estructura)
+              defaults[subPrueba._id] = subPrueba.valoresReferencia.opciones[0].valor;
+            }
+          });
+          setFormData(prev => ({ ...prev, ...defaults }));
+        } 
+        // Si no, intentar cargar desde la API
+        else if (pruebaData._id) {
+          console.log('🔄 Cargando desde API:', pruebaData._id);
+          const data = await pruebasAPI.getById(pruebaData._id);
+          console.log('✅ Datos cargados:', data);
+          setTestConfig(data);
+
+          // ✅ Inicializar TODAS las subpruebas que tienen opciones
+          const defaults = {};
+          data.subPruebas?.forEach(subPrueba => {
+            const tieneOpciones = subPrueba.valoresReferencia?.opciones?.length > 0;
+            if (tieneOpciones) {
+              // Usar la primera opción (que es NEGATIVA según tu estructura)
+              defaults[subPrueba._id] = subPrueba.valoresReferencia.opciones[0].valor;
+            }
+          });
+          setFormData(prev => ({ ...prev, ...defaults }));
+        }
+      } catch (error) {
+        console.error('❌ Error al cargar configuración de prueba:', error);
+        alert('Error al cargar la configuración de la prueba');
+      } finally {
+        setIsLoadingTest(false);
+      }
+    };
+
+    loadTestConfig();
+  }, [pruebaData]);
 
   const handlePatientSelect = useCallback((patient) => {
     setSelectedPatient(patient);
@@ -202,10 +253,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     if (!formData.fecha) validationErrors.push('Fecha');
     if (!formData.hora) validationErrors.push('Hora');
     
-    if (testConfig.codigo === 'HEM-BIOM689') {
-      const hasAnyValue = testConfig.fields.some(f => formData[f.key]?.trim());
-      if (!hasAnyValue) validationErrors.push('Al menos un resultado');
-    }
+    // ✅ NO VALIDAR - Los campos pueden estar vacíos si el usuario no los llenó
+    // La validación anterior exigía al menos un resultado, pero ahora permitimos reportes vacíos
     
     return validationErrors;
   };
@@ -227,86 +276,63 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
     };
 
-    const renderTableRows = () => {
-      return testConfig.fields.map((field) => {
-        const valor = formData[field.key];
-        if (!valor || valor.trim?.() === '') return '';
+            const renderTableRows = () => {
+      let rows = '';
 
-        // Para pruebas con select (Antidoping, Alcoholímetro)
-        if (field.type === 'select') {
-          const resultClass = valor === 'POSITIVA' ? 'result-positiva' : 'result-negativa';
-          return `
+      testConfig.subPruebas?.forEach((subPrueba) => {
+        const valor = formData[subPrueba._id];
+        const tieneOpciones = subPrueba.valoresReferencia?.opciones?.length > 0;
+        const valorFinal = valor !== undefined && valor !== null && valor !== '' 
+          ? valor 
+          : (tieneOpciones ? subPrueba.valoresReferencia.opciones[0].valor : null);
+        
+        if (!valorFinal) return;
+
+        const referencia = subPrueba.valoresReferencia?.texto || '';
+
+        // Para campos tipo select (NEGATIVA/POSITIVA)
+        if (tieneOpciones) {
+          const bgColor = (valorFinal === 'POSITIVA' || valorFinal === 'POSITIVO') ? '#fee2e2' : '#d1fae5';
+          const textColor = (valorFinal === 'POSITIVA' || valorFinal === 'POSITIVO') ? '#991b1b' : '#065f46';
+          rows += `
             <tr>
-              <td>${field.label}</td>
-              <td style="text-align: center;">
-                <span class="result-badge ${resultClass}">${valor}</span>
+              <td style="padding: 10px 12px; color: #374151; border-right: 1px solid #e5e7eb;">
+                ${subPrueba.nombre}
               </td>
-              <td>
-                <div style="font-size: 10px; line-height: 1.4;">
-                  ${testConfig.referencia || field.referencia || ''}
+              <td style="padding: 10px 12px; text-align: center; border-right: 1px solid #e5e7eb;">
+                <span style="font-weight: bold; padding: 3px 8px; border-radius: 9999px; font-size: 11px; background-color: ${bgColor}; color: ${textColor}; display: inline-block;">
+                  ${valorFinal}
+                </span>
+              </td>
+              <td style="padding: 10px 12px; color: #374151;">
+                <div style="font-size: 11px; line-height: 1.4; color: #6b7280;">
+                  ${referencia}
+                </div>
+              </td>
+            </tr>
+          `;
+        } 
+        // Para campos numéricos o de texto
+        else {
+          rows += `
+            <tr>
+              <td style="padding: 10px 12px; color: #374151; border-right: 1px solid #e5e7eb;">
+                ${subPrueba.nombre}
+              </td>
+              <td style="padding: 10px 12px; text-align: center; border-right: 1px solid #e5e7eb;">
+                <strong>${valorFinal}</strong>
+              </td>
+              <td style="padding: 10px 12px; color: #374151;">
+                <div style="font-size: 11px; line-height: 1.4; color: #6b7280;">
+                  ${referencia}
                 </div>
               </td>
             </tr>
           `;
         }
+      });
 
-        // Para Biometría Hemática
-        if (testConfig.codigo === 'HEM-BIOM689') {
-          return `
-            <tr>
-              <td>${field.label}</td>
-              <td style="text-align: center;"><strong>${valor}</strong></td>
-              <td style="text-align: center;">${field.unidad || ''}</td>
-              <td>
-                <div style="font-size: 10px; line-height: 1.4;">
-                  ${field.referencia || ''}
-                </div>
-              </td>
-            </tr>
-          `;
-        }
-
-        // Para Alcoholímetro con resultado
-        if (testConfig.codigo === 'ALCOHOLIMETRO' && field.key === 'resultado') {
-          const gradosAlcohol = formData.gradosAlcohol || '0.0';
-          const resultClass = valor === 'POSITIVA' ? 'result-positiva' : 'result-negativa';
-          return `
-            <tr>
-              <td>ALCOHOL EN ALIENTO</td>
-              <td style="text-align: center;">
-                <div>
-                  <span class="result-badge ${resultClass}">${valor}</span>
-                  <div style="font-size: 10px; color: #64748b; margin-top: 4px;">${gradosAlcohol} mg/L</div>
-                </div>
-              </td>
-              <td>
-                <div style="font-size: 10px; line-height: 1.4;">
-                  ${testConfig.referencia || ''}
-                </div>
-              </td>
-            </tr>
-          `;
-        }
-
-        return '';
-      }).filter(Boolean).join('');
-    };
-
-    const getTableHeaders = () => {
-      if (testConfig.codigo === 'HEM-BIOM689') {
-        return `
-          <th style="text-align: left;">PRUEBA</th>
-          <th style="text-align: center;">RESULTADO</th>
-          <th style="text-align: center;">UNIDAD</th>
-          <th style="text-align: left;">VALORES REF.</th>
-        `;
-      }
-
-      return `
-        <th style="text-align: left;">${testConfig.codigo === 'ALCOHOLIMETRO' ? 'PRUEBA DE ALCOHOL' : 'PRUEBA'}</th>
-        <th style="text-align: center;">RESULTADO</th>
-        <th style="text-align: left;">VALORES DE REFERENCIA</th>
-      `;
+      return rows;
     };
 
     return `
@@ -314,391 +340,389 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Reporte ${testConfig.nombre} - ${selectedPatient?.nombre}</title>
+        <title>Reporte ${testConfig?.nombre} - ${selectedPatient?.nombre}</title>
         <style>
           * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
           }
-
+          
           body {
             font-family: Arial, sans-serif;
             background: white;
             padding: 20px;
           }
-
+          
           .page {
-            width: 210mm;
-            min-height: 297mm;
+            max-width: 1024px;
             margin: 0 auto;
             background: white;
-            padding: 20mm;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            padding: 24px;
           }
-
+          
+          /* HEADER */
           .header {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 3px solid #2563eb;
-          }
-
-          .header-content {
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
             display: flex;
             justify-content: space-between;
-            align-items: start;
+            align-items: center;
           }
-
-          .logo-section {
+          
+          .header-left {
             display: flex;
-            align-items: start;
-            gap: 15px;
+            align-items: center;
+            gap: 12px;
           }
-
-          .logo-circle {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+          
+          .logo {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
-          }
-
-          .logo-text {
             color: white;
             font-weight: bold;
             font-size: 10px;
-            text-align: center;
+            flex-shrink: 0;
           }
-
+          
           .company-info h1 {
-            font-size: 18px;
-            color: #1e293b;
-            margin-bottom: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 3px;
           }
-
+          
           .company-info p {
-            font-size: 11px;
-            color: #64748b;
-            margin-top: 2px;
+            font-size: 12px;
+            color: #6b7280;
           }
-
-          .folio-info {
+          
+          .header-right {
             text-align: right;
             font-size: 11px;
-            color: #64748b;
+            color: #6b7280;
           }
-
-          .folio-info p {
-            margin-bottom: 4px;
+          
+          .header-right p {
+            margin-bottom: 3px;
           }
-
-          .patient-info {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
+          
+          /* PATIENT INFO */
+          .patient-section {
+            background-color: #f9fafb;
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
+            padding: 12px;
+            margin-bottom: 16px;
           }
-
-          .patient-info h2 {
-            font-size: 12px;
+          
+          .patient-section h2 {
+            font-size: 11px;
             font-weight: bold;
-            color: #1e293b;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #cbd5e1;
+            color: #1f2937;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #d1d5db;
           }
-
+          
           .patient-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            font-size: 11px;
+            gap: 10px;
+            font-size: 12px;
           }
-
-          .patient-field label {
-            display: block;
-            font-weight: 600;
-            color: #64748b;
-            margin-bottom: 2px;
-          }
-
-          .patient-field p {
-            color: #1e293b;
+          
+          .patient-field span.label {
             font-weight: 500;
+            color: #6b7280;
           }
-
+          
+          .patient-field p {
+            color: #1f2937;
+            font-weight: 500;
+            margin-top: 3px;
+          }
+          
+          /* TEST TITLE */
           .title-section {
             text-align: center;
-            margin: 25px 0;
+            margin-bottom: 16px;
           }
-
+          
           .title-box {
+            display: inline-block;
             background: #2563eb;
             color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            display: inline-block;
-          }
-
-          .title-box h2 {
-            font-size: 14px;
+            padding: 8px 24px;
+            border-radius: 20px;
+            font-size: 13px;
             font-weight: bold;
           }
-
+          
+          /* TABLE */
+          .results-table-container {
+            margin-bottom: 16px;
+          }
+          
           .results-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11px;
-            margin-bottom: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 12px;
           }
-
+          
+          .results-table thead {
+            background-color: #f3f4f6;
+          }
+          
           .results-table th {
-            background-color: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            padding: 10px;
+            padding: 10px 12px;
             font-weight: bold;
-            color: #1e293b;
+            color: #374151;
+            border-right: 1px solid #e5e7eb;
+            text-align: left;
           }
-
-          .results-table td {
-            border: 1px solid #e2e8f0;
-            padding: 10px;
-            color: #475569;
+          
+          .results-table th:last-child {
+            border-right: none;
           }
-
-          .result-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 10px;
+          
+          .results-table th.text-center {
+            text-align: center;
           }
-
-          .result-negativa {
-            background-color: #dcfce7;
-            color: #15803d;
-            border: 1px solid #86efac;
+          
+          .results-table tbody {
+            background: white;
           }
-
-          .result-positiva {
-            background-color: #fee2e2;
-            color: #b91c1c;
-            border: 1px solid #fca5a5;
-          }
-
-          .observations-section {
+          
+          /* OBSERVATIONS */
+          .observations {
             background-color: #fef3c7;
-            border: 1px solid #fcd34d;
+            border: 1px solid #fbbf24;
             border-radius: 8px;
             padding: 12px;
-            margin-bottom: 20px;
-            font-size: 11px;
+            margin-bottom: 16px;
           }
-
-          .observations-section strong {
-            display: block;
-            color: #92400e;
+          
+          .observations p.title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #1f2937;
             margin-bottom: 6px;
           }
-
-          .observations-section p {
-            color: #78350f;
+          
+          .observations p.content {
+            font-size: 12px;
+            color: #374151;
             line-height: 1.5;
           }
-
+          
+          /* METHOD */
           .method-section {
             background-color: #eff6ff;
-            border: 1px solid #bfdbfe;
             border-radius: 8px;
             padding: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             display: flex;
-            justify-content: space-around;
-            font-size: 11px;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
           }
-
-          .method-item {
-            text-align: center;
-          }
-
-          .method-item strong {
-            color: #1e293b;
+          
+          .method-item span.label {
             font-weight: bold;
+            color: #374151;
           }
-
-          .method-item span {
-            color: #64748b;
-            margin-left: 8px;
+          
+          .method-item span.value {
+            color: #6b7280;
+            margin-left: 6px;
           }
-
+          
+          /* END */
           .end-section {
             text-align: center;
-            margin: 25px 0;
+            margin-bottom: 16px;
           }
-
+          
           .end-box {
-            background: #1e293b;
-            color: white;
-            padding: 10px 24px;
-            border-radius: 8px;
             display: inline-block;
-          }
-
-          .end-box p {
+            background: #1f2937;
+            color: white;
+            padding: 8px 24px;
+            border-radius: 20px;
             font-size: 12px;
             font-weight: bold;
           }
-
+          
+          /* SIGNATURE */
           .signature-section {
-            margin-top: 60px;
-            padding-top: 20px;
-            border-top: 2px solid #e2e8f0;
+            margin-top: 50px;
+            border-top: 2px solid #e5e7eb;
+            padding-top: 12px;
             text-align: center;
           }
-
+          
           .signature-section p {
-            margin-bottom: 6px;
+            font-size: 11px;
+            color: #1f2937;
+            margin-bottom: 5px;
+          }
+          
+          .signature-section p.title {
+            font-weight: bold;
+          }
+          
+          .signature-section p.credential {
+            font-size: 10px;
+            color: #6b7280;
+          }
+          
+          .assistant-section {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e7eb;
+          }
+          
+          .assistant-section p.name {
+            font-weight: 500;
+            color: #374151;
             font-size: 11px;
           }
-
-          .signature-name {
-            font-weight: bold;
-            color: #1e293b;
-            font-size: 12px;
-          }
-
-          .signature-credential {
-            color: #64748b;
+          
+          .assistant-section p.contact {
+            color: #6b7280;
             font-size: 10px;
           }
-
-          .assistant-section {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #e2e8f0;
-          }
-
-          .assistant-section p {
-            font-size: 10px;
-            color: #64748b;
-          }
-
-          .assistant-name {
-            font-weight: 600;
-            color: #1e293b;
-          }
-
+          
           @media print {
             body {
               padding: 0;
             }
-
             .page {
               margin: 0;
-              padding: 15mm;
+              padding: 16px;
+              box-shadow: none;
+            }
+            .signature-section {
+              margin-top: 40px;
             }
           }
         </style>
       </head>
       <body>
         <div class="page">
+          
+          <!-- HEADER -->
           <div class="header">
-            <div class="header-content">
-              <div class="logo-section">
-                <div class="logo-circle">
-                  <div class="logo-text">SALUD</div>
-                </div>
-                <div class="company-info">
-                  <h1>"SALUD AL ALCANCE DE TODOS"</h1>
-                  <p>Laboratorio Médico Especializado</p>
-                  <p>Av República del Salvador S/N Colonia centro Atotonilco de Tula</p>
-                </div>
-              </div>
-              <div class="folio-info">
-                <p><strong>Folio:</strong> #${Math.floor(Math.random() * 10000).toString().padStart(5, '0')}</p>
-                <p><strong>Fecha:</strong> ${formatDate(formData.fecha)}</p>
-                <p><strong>Hora:</strong> ${formData.hora || ''}</p>
+            <div class="header-left">
+              <div class="logo">SALUD</div>
+              <div class="company-info">
+                <h1>"SALUD AL ALCANCE DE TODOS"</h1>
+                <p>Laboratorio Médico Especializado</p>
               </div>
             </div>
+            <div class="header-right">
+              <p>Folio: #${Math.floor(Math.random() * 10000).toString().padStart(5, '0')}</p>
+              <p>Fecha: ${formatDate(formData.fecha)}</p>
+            </div>
           </div>
-
-          <div class="patient-info">
+          
+          <!-- PATIENT INFO -->
+          <div class="patient-section">
             <h2>INFORMACIÓN DEL PACIENTE</h2>
             <div class="patient-grid">
               <div class="patient-field">
-                <label>Paciente:</label>
+                <span class="label">Paciente:</span>
                 <p>${selectedPatient?.nombre || 'No especificado'}</p>
               </div>
               <div class="patient-field">
-                <label>Expediente:</label>
+                <span class="label">Expediente:</span>
                 <p>${selectedPatient?.numeroExpediente || 'N/A'}</p>
               </div>
               <div class="patient-field">
-                <label>Edad:</label>
+                <span class="label">Edad:</span>
                 <p>${selectedPatient?.edad || 'No especificada'}</p>
               </div>
               <div class="patient-field">
-                <label>Fecha de realización:</label>
-                <p>${formatDate(formData.fecha)} - ${formData.hora || ''}</p>
+                <span class="label">Fecha de realización:</span>
+                <p>${formatDate(formData.fecha)} - ${formData.hora}</p>
               </div>
             </div>
           </div>
-
+          
+          <!-- TEST TITLE -->
           <div class="title-section">
             <div class="title-box">
-              <h2>${testConfig.nombre.toUpperCase()}</h2>
+              ${testConfig?.nombre?.toUpperCase() || 'REPORTE'}
             </div>
           </div>
-
-          <table class="results-table">
-            <thead>
-              <tr>
-                ${getTableHeaders()}
-              </tr>
-            </thead>
-            <tbody>
-              ${renderTableRows()}
-            </tbody>
-          </table>
-
+          
+          <!-- RESULTS TABLE -->
+          <div class="results-table-container">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>PRUEBA</th>
+                  <th class="text-center">RESULTADO</th>
+                  <th>VALORES REF.</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${renderTableRows()}
+              </tbody>
+            </table>
+          </div>
+          
           ${formData.observaciones ? `
-          <div class="observations-section">
-            <strong>OBSERVACIONES:</strong>
-            <p>${formData.observaciones}</p>
+          <div class="observations">
+            <p class="title">OBSERVACIONES:</p>
+            <p class="content">${formData.observaciones}</p>
           </div>
           ` : ''}
-
+          
+          <!-- METHOD -->
           <div class="method-section">
             <div class="method-item">
-              <strong>TÉCNICA:</strong>
-              <span>${testConfig.tecnica}</span>
+              <span class="label">TÉCNICA:</span>
+              <span class="value">${testConfig?.tecnica || 'N/A'}</span>
             </div>
             <div class="method-item">
-              <strong>MÉTODO:</strong>
-              <span>${testConfig.metodo}</span>
+              <span class="label">MÉTODO:</span>
+              <span class="value">${testConfig?.metodo || 'N/A'}</span>
             </div>
           </div>
-
+          
+          <!-- END -->
           <div class="end-section">
-            <div class="end-box">
-              <p>*** FIN DEL INFORME ***</p>
-            </div>
+            <div class="end-box">FIN DEL INFORME</div>
           </div>
-
+          
+          <!-- SIGNATURE -->
           <div class="signature-section">
-            <p style="font-weight: bold; margin-bottom: 10px;">ATENTAMENTE</p>
-            <p class="signature-name">Q.F.B ELIUTH GARCIA CRUZ</p>
-            <p class="signature-credential">CED.PROF. 4362774</p>
-            <p class="signature-credential">MEDICINA GENERAL: FLEBOLOGIA, AUDIOLOGIA</p>
+            <p class="title">ATENTAMENTE</p>
+            <p class="title">Q.F.B ELIUTH GARCIA CRUZ</p>
+            <p class="credential">CED.PROF. 4362774</p>
+            <p class="credential">MEDICINA GENERAL: FLEBOLOGIA, AUDIOLOGIA</p>
+            <p class="credential">Av República del Salvador S/N Colonia centro Atotonilco de Tula</p>
             
             <div class="assistant-section">
-              <p class="assistant-name">Asistente Médico</p>
-              <p>Linn Castillo - 7731333631</p>
+              <p class="name">Asistente Médico</p>
+              <p class="contact">Linn Castillo - 7731333631</p>
             </div>
           </div>
+          
         </div>
       </body>
       </html>
@@ -708,72 +732,32 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
-      // Primero imprimir el documento
+      // ✅ USAR FUNCIÓN DE IMPRESIÓN COMPATIBLE CON MÓVIL
       const contenidoHTML = generarHTMLReporte();
-      
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = 'none';
-      
-      document.body.appendChild(iframe);
-      
-      const iframeDoc = iframe.contentWindow.document;
-      iframeDoc.open();
-      iframeDoc.write(contenidoHTML);
-      iframeDoc.close();
-      
-      iframe.onload = () => {
-        setTimeout(() => {
-          try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            
-            setTimeout(() => {
-              document.body.removeChild(iframe);
-            }, 100);
-          } catch (error) {
-            console.error('Error al imprimir:', error);
-            document.body.removeChild(iframe);
-          }
-        }, 250);
-      };
+      await printReport(contenidoHTML, `reporte_${testConfig?.codigo || 'laboratorio'}`);
 
-      // Luego guardar en BD
+      // Preparar resultados para guardar
       let resultados = [];
       
-      if (pruebaData?.subPruebas && pruebaData.subPruebas.length > 0) {
-        resultados = testConfig.fields
-          .filter(f => formData[f.key])
-          .map((field, index) => ({
-            subPruebaId: pruebaData.subPruebas[index % pruebaData.subPruebas.length]._id,
-            clave: field.key.toUpperCase(),
-            nombre: field.label,
-            valor: formData[field.key],
-            unidad: field.unidad || '',
-            referencia: field.referencia || testConfig.referencia || ''
-          }));
-      } else {
-        resultados = testConfig.fields
-          .filter(f => formData[f.key])
-          .map(field => ({
-            clave: field.key.toUpperCase(),
-            nombre: field.label,
-            valor: formData[field.key],
-            unidad: field.unidad || '',
-            referencia: field.referencia || testConfig.referencia || ''
-          }));
-      }
+      testConfig.subPruebas?.forEach((subPrueba) => {
+        const valor = formData[subPrueba._id];
+        if (valor) {
+          resultados.push({
+            subPruebaId: subPrueba._id,
+            clave: subPrueba.clave || subPrueba.nombre.toUpperCase(),
+            nombre: subPrueba.nombre,
+            valor: valor.toString(),
+            unidad: subPrueba.unidad || '',
+            referencia: subPrueba.valorReferencia || ''
+          });
+        }
+      });
 
-      // ⭐ Combinar fecha y hora en un solo timestamp
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
       const reportData = {
         pacienteId: formData.pacienteId,
-        pruebaId: pruebaData?._id,
+        pruebaId: testConfig._id,
         fechaRealizacion: fechaHoraRealizacion.toISOString(),
         resultados,
         observaciones: formData.observaciones || '',
@@ -783,16 +767,27 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
 
       await reportesAPI.create(reportData);
       
-      alert('Reporte guardado e impreso exitosamente');
+      alert('✅ Reporte guardado e impreso exitosamente');
       setTimeout(() => onBack(), 500);
       
     } catch (error) {
       console.error('Error al guardar:', error);
-      alert('Error al guardar el reporte: ' + error.message);
+      alert('❌ Error al guardar el reporte: ' + error.message);
     } finally {
       setIsSaving(false);
     }
   };
+
+  if (isLoadingTest) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-8 rounded-xl">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Cargando configuración...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (currentStep === 'patient') {
     return (
@@ -860,7 +855,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             <button onClick={onBack} className="mr-2 p-1 hover:bg-blue-700 rounded-full">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h2 className="text-base font-semibold">{testConfig.nombre}</h2>
+            <h2 className="text-base font-semibold">{testConfig?.nombre || 'Generar Reporte'}</h2>
           </div>
         </div>
 

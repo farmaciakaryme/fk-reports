@@ -11,6 +11,15 @@ import UniversalNav from './UniversalNav';
 const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
   const menuItems = [
     {
+      id: 'reports',
+      title: 'Reportes',
+      description: 'Crear reportes',
+      detail: 'Generar y descargar PDFs profesionales',
+      icon: FileText,
+      color: 'from-orange-500 to-red-500',
+      action: () => onNavigate('reports')
+    },
+    {
       id: 'patients',
       title: 'Pacientes',
       description: 'Gestionar pacientes',
@@ -27,15 +36,6 @@ const Dashboard = ({ currentUser, onLogout, onNavigate }) => {
       icon: FlaskConical,
       color: 'from-purple-500 to-pink-500',
       action: () => onNavigate('tests')
-    },
-    {
-      id: 'reports',
-      title: 'Reportes',
-      description: 'Crear reportes',
-      detail: 'Generar y descargar PDFs profesionales',
-      icon: FileText,
-      color: 'from-orange-500 to-red-500',
-      action: () => onNavigate('reports')
     },
     {
       id: 'admin',

@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useState, useCallback, useEffect } from 'react';
-import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import UniversalNav from '../navigation/UniversalNav';
 import ReportGenerator from './ReportGenerator';
 import BitacoraModal from './BitacoraModal';
@@ -77,6 +77,80 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
   );
 };
 
+const ReportViewModal = ({ report, onClose }) => {
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-MX', { 
+      day: '2-digit', 
+      month: 'long', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b flex items-center justify-between bg-blue-600 text-white">
+          <div>
+            <h2 className="text-xl font-bold">Detalles del Reporte</h2>
+            <p className="text-sm opacity-90">Folio: {report.folio}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-blue-700 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Datos del Paciente</h3>
+              <div className="space-y-2">
+                <p className="text-sm"><span className="font-medium">Nombre:</span> {report.datosPaciente?.nombre || 'N/A'}</p>
+                <p className="text-sm"><span className="font-medium">Edad:</span> {report.datosPaciente?.edad || 'N/A'} años</p>
+                <p className="text-sm"><span className="font-medium">Sexo:</span> {report.datosPaciente?.sexo || 'N/A'}</p>
+                <p className="text-sm"><span className="font-medium">CURP:</span> {report.datosPaciente?.curp || 'N/A'}</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Información de la Prueba</h3>
+              <div className="space-y-2">
+                <p className="text-sm"><span className="font-medium">Prueba:</span> {report.datosPrueba?.nombre || 'N/A'}</p>
+                <p className="text-sm"><span className="font-medium">Fecha:</span> {formatDate(report.fechaRealizacion)}</p>
+                <p className="text-sm"><span className="font-medium">Estado:</span> 
+                  <span className={`ml-2 px-2 py-1 rounded text-xs ${report.autorizado ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    {report.autorizado ? 'Autorizado' : 'Pendiente'}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {report.resultadosPruebas && report.resultadosPruebas.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Resultados</h3>
+              <div className="grid grid-cols-1 gap-4">
+                {report.resultadosPruebas.map((resultado, idx) => (
+                  <div key={idx} className="bg-gray-50 p-4 rounded-lg">
+                    <p className="font-medium text-gray-900 mb-2">{resultado.nombreSubPrueba}</p>
+                    <p className="text-sm text-gray-700"><span className="font-medium">Resultado:</span> {resultado.resultado}</p>
+                    {resultado.observaciones && (
+                      <p className="text-sm text-gray-600 mt-1"><span className="font-medium">Observaciones:</span> {resultado.observaciones}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ReportRow = ({ report, onView, onEdit, onDownload, onDelete }) => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -138,12 +212,15 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [showBitacora, setShowBitacora] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
   const [selectedPrueba, setSelectedPrueba] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
   
   const [reports, setReports] = useState([]);
   const [pruebas, setPruebas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPruebas, setIsLoadingPruebas] = useState(false);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalReports, setTotalReports] = useState(0);
@@ -151,6 +228,13 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   useEffect(() => {
     fetchReportes();
   }, [currentPage]);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const fetchReportes = async () => {
     setIsLoading(true);
@@ -207,27 +291,111 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   };
 
   const handleView = (report) => {
-    console.log('Ver reporte:', report);
+    setSelectedReport(report);
+    setShowViewModal(true);
   };
 
   const handleEdit = (report) => {
-    console.log('Editar reporte:', report);
+    setSelectedReport(report);
+    setSelectedPrueba(report.prueba || report.datosPrueba);
+    setActiveModal('edit');
   };
 
   const handleDownload = async (report) => {
-    console.log('Descargar reporte:', report);
-    alert('Función de descarga en desarrollo');
+    try {
+      setSuccessMessage('Generando PDF...');
+      
+      // Crear contenido HTML para el PDF
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Reporte ${report.folio}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .label { font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>REPORTE CLÍNICO</h1>
+            <p>Folio: ${report.folio}</p>
+          </div>
+          
+          <div class="section">
+            <h2>Datos del Paciente</h2>
+            <p><span class="label">Nombre:</span> ${report.datosPaciente?.nombre || 'N/A'}</p>
+            <p><span class="label">Edad:</span> ${report.datosPaciente?.edad || 'N/A'} años</p>
+            <p><span class="label">Sexo:</span> ${report.datosPaciente?.sexo || 'N/A'}</p>
+            <p><span class="label">CURP:</span> ${report.datosPaciente?.curp || 'N/A'}</p>
+          </div>
+          
+          <div class="section">
+            <h2>Información de la Prueba</h2>
+            <p><span class="label">Prueba:</span> ${report.datosPrueba?.nombre || 'N/A'}</p>
+            <p><span class="label">Fecha:</span> ${new Date(report.fechaRealizacion).toLocaleDateString('es-MX')}</p>
+          </div>
+          
+          ${report.resultadosPruebas && report.resultadosPruebas.length > 0 ? `
+          <div class="section">
+            <h2>Resultados</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Prueba</th>
+                  <th>Resultado</th>
+                  <th>Observaciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${report.resultadosPruebas.map(r => `
+                  <tr>
+                    <td>${r.nombreSubPrueba}</td>
+                    <td>${r.resultado}</td>
+                    <td>${r.observaciones || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+        </body>
+        </html>
+      `;
+      
+      // Crear un blob y descargarlo
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_${report.folio}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      setSuccessMessage('PDF descargado correctamente');
+    } catch (err) {
+      console.error('Error al descargar reporte:', err);
+      setError('Error al descargar el reporte');
+    }
   };
 
   const handleDelete = async (report) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este reporte?')) {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar el reporte ${report.folio}?`)) {
       try {
         await reportesAPI.delete(report._id);
-        fetchReportes();
-        alert('Reporte eliminado exitosamente');
+        setSuccessMessage(`Reporte ${report.folio} eliminado exitosamente`);
+        await fetchReportes();
       } catch (err) {
         console.error('Error al eliminar reporte:', err);
-        alert('Error al eliminar el reporte: ' + err.message);
+        setError('Error al eliminar el reporte: ' + err.message);
       }
     }
   };
@@ -298,6 +466,13 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
               </div>
             </div>
           </div>
+
+          {successMessage && (
+            <div className="mb-6 flex items-center gap-2 text-green-700 bg-green-50 px-4 py-3 rounded-lg border border-green-200">
+              <CheckCircle className="w-5 h-5 flex-shrink-0" />
+              <p className="text-sm font-inter">{successMessage}</p>
+            </div>
+          )}
 
           {error && (
             <div className="mb-6 flex items-center gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-lg">
@@ -397,6 +572,16 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
 
       {showBitacora && (
         <BitacoraModal onClose={() => setShowBitacora(false)} />
+      )}
+
+      {showViewModal && selectedReport && (
+        <ReportViewModal
+          report={selectedReport}
+          onClose={() => {
+            setShowViewModal(false);
+            setSelectedReport(null);
+          }}
+        />
       )}
 
       {activeModal === 'report' && (
