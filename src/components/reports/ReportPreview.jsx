@@ -5,9 +5,489 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString + 'T00:00:00');
-    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
   };
 
+  const generarHTMLReporte = () => {
+    const renderTableRows = () => {
+      return testConfig.fields.map((field) => {
+        const valor = formData[field.key];
+        if (!valor || valor.trim?.() === '') return '';
+
+        // Para Antidoping y pruebas con select
+        if (field.type === 'select') {
+          const resultClass = valor === 'POSITIVA' ? 'result-positiva' : 'result-negativa';
+          return `
+            <tr>
+              <td>${field.label}</td>
+              <td style="text-align: center;">
+                <span class="result-badge ${resultClass}">${valor}</span>
+              </td>
+              <td>
+                <div style="font-size: 10px; line-height: 1.4;">
+                  ${testConfig.referencia || field.referencia}
+                </div>
+              </td>
+            </tr>
+          `;
+        }
+
+        // Para Biometría Hemática
+        if (testConfig.codigo === 'HEM-BIOM689') {
+          return `
+            <tr>
+              <td>${field.label}</td>
+              <td style="text-align: center;"><strong>${valor}</strong></td>
+              <td style="text-align: center;">${field.unidad}</td>
+              <td>
+                <div style="font-size: 10px; line-height: 1.4;">
+                  ${field.referencia}
+                </div>
+              </td>
+            </tr>
+          `;
+        }
+
+        // Para Alcoholímetro
+        if (testConfig.codigo === 'ALCOHOLIMETRO' && field.key === 'resultado') {
+          const gradosAlcohol = formData.gradosAlcohol || '0.0';
+          const resultClass = valor === 'POSITIVA' ? 'result-positiva' : 'result-negativa';
+          return `
+            <tr>
+              <td>ALCOHOL EN ALIENTO</td>
+              <td style="text-align: center;">
+                <div>
+                  <span class="result-badge ${resultClass}">${valor}</span>
+                  <div style="font-size: 10px; color: #64748b; margin-top: 4px;">${gradosAlcohol} mg/L</div>
+                </div>
+              </td>
+              <td>
+                <div style="font-size: 10px; line-height: 1.4;">
+                  ${testConfig.referencia}
+                </div>
+              </td>
+            </tr>
+          `;
+        }
+
+        return '';
+      }).filter(Boolean).join('');
+    };
+
+    const getTableHeaders = () => {
+      if (testConfig.codigo === 'HEM-BIOM689') {
+        return `
+          <th style="text-align: left;">PRUEBA</th>
+          <th style="text-align: center;">RESULTADO</th>
+          <th style="text-align: center;">UNIDAD</th>
+          <th style="text-align: left;">VALORES REF.</th>
+        `;
+      }
+
+      return `
+        <th style="text-align: left;">${testConfig.codigo === 'ALCOHOLIMETRO' ? 'PRUEBA DE ALCOHOL' : 'PRUEBA'}</th>
+        <th style="text-align: center;">RESULTADO</th>
+        <th style="text-align: left;">VALORES DE REFERENCIA</th>
+      `;
+    };
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reporte ${testConfig.nombre} - ${selectedPatient?.nombre}</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+
+          body {
+            font-family: Arial, sans-serif;
+            background: white;
+            padding: 20px;
+          }
+
+          .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: white;
+            padding: 20mm;
+          }
+
+          .header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #2563eb;
+          }
+
+          .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+          }
+
+          .logo-section {
+            display: flex;
+            align-items: start;
+            gap: 15px;
+          }
+
+          .logo-circle {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+
+          .logo-text {
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+            text-align: center;
+          }
+
+          .company-info h1 {
+            font-size: 18px;
+            color: #1e293b;
+            margin-bottom: 4px;
+          }
+
+          .company-info p {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+          }
+
+          .folio-info {
+            text-align: right;
+            font-size: 11px;
+            color: #64748b;
+          }
+
+          .folio-info p {
+            margin-bottom: 4px;
+          }
+
+          .patient-info {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+          }
+
+          .patient-info h2 {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #cbd5e1;
+          }
+
+          .patient-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            font-size: 11px;
+          }
+
+          .patient-field label {
+            display: block;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 2px;
+          }
+
+          .patient-field p {
+            color: #1e293b;
+            font-weight: 500;
+          }
+
+          .title-section {
+            text-align: center;
+            margin: 25px 0;
+          }
+
+          .title-box {
+            background: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            display: inline-block;
+          }
+
+          .title-box h2 {
+            font-size: 14px;
+            font-weight: bold;
+          }
+
+          .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-bottom: 20px;
+          }
+
+          .results-table th {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            font-weight: bold;
+            color: #1e293b;
+          }
+
+          .results-table td {
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            color: #475569;
+          }
+
+          .result-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 10px;
+          }
+
+          .result-negativa {
+            background-color: #dcfce7;
+            color: #15803d;
+            border: 1px solid #86efac;
+          }
+
+          .result-positiva {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fca5a5;
+          }
+
+          .observations-section {
+            background-color: #fef3c7;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 11px;
+          }
+
+          .observations-section strong {
+            display: block;
+            color: #92400e;
+            margin-bottom: 6px;
+          }
+
+          .observations-section p {
+            color: #78350f;
+            line-height: 1.5;
+          }
+
+          .method-section {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            font-size: 11px;
+          }
+
+          .method-item {
+            text-align: center;
+          }
+
+          .method-item strong {
+            color: #1e293b;
+            font-weight: bold;
+          }
+
+          .method-item span {
+            color: #64748b;
+            margin-left: 8px;
+          }
+
+          .end-section {
+            text-align: center;
+            margin: 25px 0;
+          }
+
+          .end-box {
+            background: #1e293b;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 8px;
+            display: inline-block;
+          }
+
+          .end-box p {
+            font-size: 12px;
+            font-weight: bold;
+          }
+
+          .signature-section {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+          }
+
+          .signature-section p {
+            margin-bottom: 6px;
+            font-size: 11px;
+          }
+
+          .signature-name {
+            font-weight: bold;
+            color: #1e293b;
+            font-size: 12px;
+          }
+
+          .signature-credential {
+            color: #64748b;
+            font-size: 10px;
+          }
+
+          .assistant-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+          }
+
+          .assistant-section p {
+            font-size: 10px;
+            color: #64748b;
+          }
+
+          .assistant-name {
+            font-weight: 600;
+            color: #1e293b;
+          }
+
+          @media print {
+            body {
+              padding: 0;
+            }
+
+            .page {
+              margin: 0;
+              padding: 15mm;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="header">
+            <div class="header-content">
+              <div class="logo-section">
+                <div class="logo-circle">
+                  <div class="logo-text">SALUD</div>
+                </div>
+                <div class="company-info">
+                  <h1>"SALUD AL ALCANCE DE TODOS"</h1>
+                  <p>Laboratorio Médico Especializado</p>
+                  <p>Av República del Salvador S/N Colonia centro Atotonilco de Tula</p>
+                </div>
+              </div>
+              <div class="folio-info">
+                <p><strong>Folio:</strong> #${Math.floor(Math.random() * 10000).toString().padStart(5, '0')}</p>
+                <p><strong>Fecha:</strong> ${formatDate(formData.fecha)}</p>
+                <p><strong>Hora:</strong> ${formData.hora}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="patient-info">
+            <h2>INFORMACIÓN DEL PACIENTE</h2>
+            <div class="patient-grid">
+              <div class="patient-field">
+                <label>Paciente:</label>
+                <p>${selectedPatient?.nombre || 'No especificado'}</p>
+              </div>
+              <div class="patient-field">
+                <label>Expediente:</label>
+                <p>${selectedPatient?.numeroExpediente || 'N/A'}</p>
+              </div>
+              <div class="patient-field">
+                <label>Edad:</label>
+                <p>${selectedPatient?.edad || 'No especificada'}</p>
+              </div>
+              <div class="patient-field">
+                <label>Fecha de realización:</label>
+                <p>${formatDate(formData.fecha)} - ${formData.hora}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="title-section">
+            <div class="title-box">
+              <h2>${testConfig.nombre.toUpperCase()}</h2>
+            </div>
+          </div>
+
+          <table class="results-table">
+            <thead>
+              <tr>
+                ${getTableHeaders()}
+              </tr>
+            </thead>
+            <tbody>
+              ${renderTableRows()}
+            </tbody>
+          </table>
+
+          ${formData.observaciones ? `
+          <div class="observations-section">
+            <strong>OBSERVACIONES:</strong>
+            <p>${formData.observaciones}</p>
+          </div>
+          ` : ''}
+
+          <div class="method-section">
+            <div class="method-item">
+              <strong>TÉCNICA:</strong>
+              <span>${testConfig.tecnica}</span>
+            </div>
+            <div class="method-item">
+              <strong>MÉTODO:</strong>
+              <span>${testConfig.metodo}</span>
+            </div>
+          </div>
+
+          <div class="end-section">
+            <div class="end-box">
+              <p>*** FIN DEL INFORME ***</p>
+            </div>
+          </div>
+
+          <div class="signature-section">
+            <p style="font-weight: bold; margin-bottom: 10px;">ATENTAMENTE</p>
+            <p class="signature-name">Q.F.B ELIUTH GARCIA CRUZ</p>
+            <p class="signature-credential">CED.PROF. 4362774</p>
+            <p class="signature-credential">MEDICINA GENERAL: FLEBOLOGIA, AUDIOLOGIA</p>
+            
+            <div class="assistant-section">
+              <p class="assistant-name">Asistente Médico</p>
+              <p>Linn Castillo - 7731333631</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  // Renderizar vista previa en pantalla
   const renderTableRows = () => {
     return testConfig.fields.map((field) => {
       const valor = formData[field.key];
@@ -34,7 +514,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
         );
       }
 
-      // Para Biometría Hemática y pruebas con valores numéricos
+      // Para Biometría Hemática
       if (testConfig.codigo === 'HEM-BIOM689') {
         return (
           <tr key={field.key} className="border-t border-gray-300">
@@ -54,7 +534,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
         );
       }
 
-      // Para Alcoholímetro - mostrar grados de alcohol y resultado
+      // Para Alcoholímetro
       if (testConfig.codigo === 'ALCOHOLIMETRO' && field.key === 'resultado') {
         const gradosAlcohol = formData.gradosAlcohol || '0.0';
         return (
@@ -110,62 +590,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
 
   return (
     <div className="bg-white p-8">
-      {/* Estilos de impresión */}
-      <style>{`
-        @media print {
-          body {
-            margin: 0;
-            padding: 0;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          
-          @page {
-            size: letter;
-            margin: 1cm;
-          }
-          
-          .print-container {
-            width: 100%;
-            max-width: none;
-            margin: 0;
-            padding: 0;
-            font-size: 11pt;
-            line-height: 1.4;
-          }
-          
-          table {
-            page-break-inside: auto;
-          }
-          
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-          }
-          
-          thead {
-            display: table-header-group;
-          }
-          
-          .no-print {
-            display: none !important;
-          }
-          
-          .page-break {
-            page-break-before: always;
-          }
-        }
-        
-        @media screen {
-          .print-container {
-            max-width: 800px;
-            margin: 0 auto;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          }
-        }
-      `}</style>
-      
-      <div className="print-container space-y-6">
+      <div className="max-w-4xl mx-auto bg-white space-y-6">
         
         {/* Header con logo y título */}
         <div className="border-b-2 border-blue-600 pb-4">
