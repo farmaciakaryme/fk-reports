@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unknown-property */
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react/prop-types */
 
@@ -23,7 +24,6 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
       // Solo omitir si realmente no hay valor
       if (!valorFinal) return null;
 
-      const unidad = subPrueba.unidad || '';
       const referencia = subPrueba.valoresReferencia?.texto || '';
 
       // Para resultados tipo select (POSITIVA/NEGATIVA)
