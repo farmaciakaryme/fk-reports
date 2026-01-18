@@ -662,4 +662,4 @@ const TestManagement = ({ currentUser, onLogout, onNavigate }) => {
   );
 };
 
-export default Test-Management;
+export default TestManagement;
