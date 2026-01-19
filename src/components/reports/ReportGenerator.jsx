@@ -265,7 +265,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ FUNCIÓN MEJORADA: Imprimir con soporte para móviles
+  // ✅ FUNCIÓN MEJORADA: Imprimir SOLO el contenido del reporte en iframe
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -300,26 +300,26 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
 
       await reportesAPI.create(reportData);
       
-      // 2. Obtener el HTML del reporte
-      const reportElement = document.querySelector('.report-to-print');
-      if (!reportElement) {
-        alert('Error: No se encontró el reporte');
+      // 2. Obtener SOLO el contenido interno del reporte (sin el modal)
+      const reportContent = document.querySelector('.report-to-print');
+      if (!reportContent) {
+        alert('Error: No se encontró el contenido del reporte');
         return;
       }
 
-      // 3. Detectar si es móvil
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      // 4. Crear iframe oculto con configuración específica para móviles
+      // 3. Crear un contenedor temporal solo con el reporte
+      const tempContainer = document.createElement('div');
+      tempContainer.innerHTML = reportContent.innerHTML;
+
+      // 4. Crear iframe oculto
       const iframe = document.createElement('iframe');
       iframe.style.position = 'absolute';
       iframe.style.width = '0';
       iframe.style.height = '0';
       iframe.style.border = 'none';
-      iframe.style.overflow = 'hidden';
       document.body.appendChild(iframe);
 
-      // 5. Escribir el contenido en el iframe con estilos mejorados para móviles
+      // 5. Escribir SOLO el contenido del reporte en el iframe
       const iframeDoc = iframe.contentWindow.document;
       iframeDoc.open();
       iframeDoc.write(`
@@ -327,14 +327,14 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         <html>
           <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Reporte Médico</title>
             <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
             <style>
-              /* Configuración de página para impresión */
+              /* Configuración de página */
               @page { 
                 size: A4 portrait; 
-                margin: 0.5in;
+                margin: 0.5in; 
               }
               
               /* Reset y configuración base */
@@ -345,92 +345,79 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
                 box-sizing: border-box;
               }
               
-              html, body {
+              html {
                 margin: 0;
                 padding: 0;
                 width: 100%;
                 height: 100%;
-                background: white;
+              }
+              
+              body { 
+                margin: 0;
+                padding: 0;
                 font-family: Arial, sans-serif;
+                background: white;
+                width: 100%;
+                height: auto;
               }
               
-              body {
-                transform: scale(1);
-                transform-origin: top left;
-              }
-              
-              /* Estilos específicos para móviles */
-              @media screen and (max-width: 768px) {
-                body {
-                  width: 210mm;
-                  max-width: 210mm;
-                }
-              }
-              
-              /* Estilos para impresión */
+              /* Para impresión */
               @media print {
                 html, body {
                   width: 210mm;
-                  height: 297mm;
+                  height: auto;
                   margin: 0;
                   padding: 0;
+                  background: white;
                 }
                 
-                body {
-                  transform: none !important;
-                }
-                
-                /* Forzar tamaños correctos */
-                .report-container {
-                  page-break-after: always;
-                  width: 100%;
-                  height: auto;
+                /* Ocultar todo lo que no sea el reporte */
+                body > *:not(.report-content) {
+                  display: none !important;
                 }
                 
                 /* Evitar cortes de página */
                 .section {
                   page-break-inside: avoid;
                 }
-                
-                /* Ocultar elementos de UI */
-                button, .no-print {
-                  display: none !important;
-                }
               }
               
-              /* Prevenir zoom en móviles */
-              input, select, textarea {
-                font-size: 16px !important;
+              /* Para vista en pantalla (móviles) */
+              @media screen {
+                body {
+                  min-height: 100vh;
+                  display: flex;
+                  justify-content: center;
+                  align-items: flex-start;
+                  padding: 20px;
+                  background: #f5f5f5;
+                }
+                
+                .report-content {
+                  max-width: 210mm;
+                  width: 100%;
+                  background: white;
+                  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }
               }
             </style>
           </head>
           <body>
-            <div class="report-container">
-              ${reportElement.innerHTML}
+            <div class="report-content">
+              ${tempContainer.innerHTML}
             </div>
           </body>
         </html>
       `);
       iframeDoc.close();
 
-      // 6. Esperar a que el contenido cargue completamente
-      const waitTime = isMobile ? 800 : 250;
-      
+      // 6. Esperar a que cargue y luego imprimir
       setTimeout(() => {
         try {
-          // En móviles, ajustar viewport antes de imprimir
-          if (isMobile) {
-            const metaViewport = iframeDoc.querySelector('meta[name="viewport"]');
-            if (metaViewport) {
-              metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
-            }
-          }
-          
           iframe.contentWindow.focus();
           iframe.contentWindow.print();
           
-          // 7. Limpiar después de un tiempo mayor en móviles
-          const cleanupTime = isMobile ? 1000 : 500;
+          // 7. Limpiar
           setTimeout(() => {
             try {
               document.body.removeChild(iframe);
@@ -438,18 +425,17 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
               console.error('Error al limpiar iframe:', e);
             }
             onBack();
-          }, cleanupTime);
-          
+          }, 500);
         } catch (printError) {
           console.error('Error al imprimir:', printError);
-          alert('Error al abrir el diálogo de impresión. Por favor, intenta nuevamente.');
+          alert('Error al abrir el diálogo de impresión');
           try {
             document.body.removeChild(iframe);
           } catch (e) {
             console.error('Error al limpiar iframe:', e);
           }
         }
-      }, waitTime);
+      }, 300);
       
     } catch (error) {
       console.error('Error al guardar:', error);
