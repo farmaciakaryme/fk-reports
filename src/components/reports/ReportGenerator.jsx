@@ -265,7 +265,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ NUEVA FUNCIÓN: Imprimir usando iframe
+  // ✅ FUNCIÓN MEJORADA: Imprimir con soporte para móviles
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -307,15 +307,19 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         return;
       }
 
-      // 3. Crear iframe oculto
+      // 3. Detectar si es móvil
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // 4. Crear iframe oculto con configuración específica para móviles
       const iframe = document.createElement('iframe');
       iframe.style.position = 'absolute';
       iframe.style.width = '0';
       iframe.style.height = '0';
       iframe.style.border = 'none';
+      iframe.style.overflow = 'hidden';
       document.body.appendChild(iframe);
 
-      // 4. Escribir el contenido en el iframe
+      // 5. Escribir el contenido en el iframe con estilos mejorados para móviles
       const iframeDoc = iframe.contentWindow.document;
       iframeDoc.open();
       iframeDoc.write(`
@@ -323,32 +327,129 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         <html>
           <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
             <title>Reporte Médico</title>
             <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
             <style>
-              @page { size: A4; margin: 0.5in; }
-              body { margin: 0; padding: 0; }
-              * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+              /* Configuración de página para impresión */
+              @page { 
+                size: A4 portrait; 
+                margin: 0.5in;
+              }
+              
+              /* Reset y configuración base */
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                box-sizing: border-box;
+              }
+              
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                background: white;
+                font-family: Arial, sans-serif;
+              }
+              
+              body {
+                transform: scale(1);
+                transform-origin: top left;
+              }
+              
+              /* Estilos específicos para móviles */
+              @media screen and (max-width: 768px) {
+                body {
+                  width: 210mm;
+                  max-width: 210mm;
+                }
+              }
+              
+              /* Estilos para impresión */
+              @media print {
+                html, body {
+                  width: 210mm;
+                  height: 297mm;
+                  margin: 0;
+                  padding: 0;
+                }
+                
+                body {
+                  transform: none !important;
+                }
+                
+                /* Forzar tamaños correctos */
+                .report-container {
+                  page-break-after: always;
+                  width: 100%;
+                  height: auto;
+                }
+                
+                /* Evitar cortes de página */
+                .section {
+                  page-break-inside: avoid;
+                }
+                
+                /* Ocultar elementos de UI */
+                button, .no-print {
+                  display: none !important;
+                }
+              }
+              
+              /* Prevenir zoom en móviles */
+              input, select, textarea {
+                font-size: 16px !important;
+              }
             </style>
           </head>
           <body>
-            ${reportElement.innerHTML}
+            <div class="report-container">
+              ${reportElement.innerHTML}
+            </div>
           </body>
         </html>
       `);
       iframeDoc.close();
 
-      // 5. Esperar a que cargue y luego imprimir
+      // 6. Esperar a que el contenido cargue completamente
+      const waitTime = isMobile ? 800 : 250;
+      
       setTimeout(() => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        
-        // 6. Limpiar
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-          onBack();
-        }, 500);
-      }, 250);
+        try {
+          // En móviles, ajustar viewport antes de imprimir
+          if (isMobile) {
+            const metaViewport = iframeDoc.querySelector('meta[name="viewport"]');
+            if (metaViewport) {
+              metaViewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+            }
+          }
+          
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          
+          // 7. Limpiar después de un tiempo mayor en móviles
+          const cleanupTime = isMobile ? 1000 : 500;
+          setTimeout(() => {
+            try {
+              document.body.removeChild(iframe);
+            } catch (e) {
+              console.error('Error al limpiar iframe:', e);
+            }
+            onBack();
+          }, cleanupTime);
+          
+        } catch (printError) {
+          console.error('Error al imprimir:', printError);
+          alert('Error al abrir el diálogo de impresión. Por favor, intenta nuevamente.');
+          try {
+            document.body.removeChild(iframe);
+          } catch (e) {
+            console.error('Error al limpiar iframe:', e);
+          }
+        }
+      }, waitTime);
       
     } catch (error) {
       console.error('Error al guardar:', error);
