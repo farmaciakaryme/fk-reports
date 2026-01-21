@@ -4,6 +4,8 @@ import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
 import { reportesAPI, pruebasAPI } from '../../services/api';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Componente de Formulario Dinámico
 const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }) => {
@@ -265,7 +267,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ FUNCIÓN MEJORADA: Imprimir SOLO el contenido del reporte en iframe
+  // ✅ FUNCIÓN CORREGIDA: PC = window.print() sin pestañas | Móvil = PDF
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -300,142 +302,151 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
 
       await reportesAPI.create(reportData);
       
-      // 2. Obtener SOLO el contenido interno del reporte (sin el modal)
-      const reportContent = document.querySelector('.report-to-print');
-      if (!reportContent) {
-        alert('Error: No se encontró el contenido del reporte');
+      // 2. Obtener el elemento del reporte
+      const reportElement = document.querySelector('.report-to-print');
+      if (!reportElement) {
+        alert('Error: No se encontró el reporte');
+        setIsSaving(false);
         return;
       }
 
-      // 3. Crear un contenedor temporal solo con el reporte
-      const tempContainer = document.createElement('div');
-      tempContainer.innerHTML = reportContent.innerHTML;
+      // 3. Detectar si es móvil
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      // 4. Crear iframe oculto
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'absolute';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = 'none';
-      document.body.appendChild(iframe);
+      if (isMobile) {
+        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF
+        console.log('📱 Generando PDF para móvil...');
+        
+        const canvas = await html2canvas(reportElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: 794,
+          windowHeight: 1123
+        });
 
-      // 5. Escribir SOLO el contenido del reporte en el iframe
-      const iframeDoc = iframe.contentWindow.document;
-      iframeDoc.open();
-      iframeDoc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reporte Médico</title>
-            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-            <style>
-              /* Configuración de página */
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        if (imgHeight > pdfHeight) {
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pdfHeight);
+        } else {
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+        }
+
+        // Guardar el PDF localmente
+        const fileName = `reporte_${selectedPatient?.nombre || 'paciente'}_${formData.fecha}.pdf`;
+        pdf.save(fileName);
+
+        // Mensaje de éxito
+        alert('✅ Reporte guardado y PDF descargado');
+        
+      } else {
+        // ✅ PC: Usar window.print() SIN ABRIR PESTAÑAS
+        console.log('🖥️ Imprimiendo en PC (misma pestaña)...');
+        
+        // Ocultar todo excepto el reporte
+        const allElements = document.body.children;
+        const hiddenElements = [];
+        
+        // Ocultar todos los elementos excepto el modal del reporte
+        for (let i = 0; i < allElements.length; i++) {
+          const element = allElements[i];
+          if (!element.contains(reportElement)) {
+            element.style.display = 'none';
+            hiddenElements.push(element);
+          }
+        }
+        
+        // Ocultar el modal pero mostrar solo el contenido del reporte
+        const previewModal = reportElement.closest('.fixed');
+        if (previewModal) {
+          // Guardar estilos originales
+          const originalModalStyles = {
+            position: previewModal.style.position,
+            inset: previewModal.style.inset,
+            background: previewModal.style.background,
+            display: previewModal.style.display,
+            alignItems: previewModal.style.alignItems,
+            justifyContent: previewModal.style.justifyContent,
+            padding: previewModal.style.padding,
+            zIndex: previewModal.style.zIndex
+          };
+          
+          // Hacer el modal transparente y ocupar toda la pantalla
+          previewModal.style.position = 'static';
+          previewModal.style.inset = 'auto';
+          previewModal.style.background = 'white';
+          previewModal.style.padding = '0';
+          
+          // Ocultar header y botones del modal
+          const modalHeader = previewModal.querySelector('.bg-gray-50');
+          const modalContainer = previewModal.querySelector('.rounded-xl');
+          if (modalHeader) modalHeader.style.display = 'none';
+          if (modalContainer) {
+            modalContainer.style.maxWidth = '100%';
+            modalContainer.style.boxShadow = 'none';
+          }
+          
+          // Crear estilos de impresión
+          const printStyle = document.createElement('style');
+          printStyle.id = 'print-style-temp';
+          printStyle.innerHTML = `
+            @media print {
               @page { 
-                size: A4 portrait; 
-                margin: 0.5in; 
+                size: A4; 
+                margin: 10mm; 
               }
-              
-              /* Reset y configuración base */
+              body { 
+                margin: 0; 
+                padding: 0;
+              }
               * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
-                color-adjust: exact !important;
-                box-sizing: border-box;
               }
-              
-              html {
-                margin: 0;
-                padding: 0;
-                width: 100%;
-                height: 100%;
-              }
-              
-              body { 
-                margin: 0;
-                padding: 0;
-                font-family: Arial, sans-serif;
-                background: white;
-                width: 100%;
-                height: auto;
-              }
-              
-              /* Para impresión */
-              @media print {
-                html, body {
-                  width: 210mm;
-                  height: auto;
-                  margin: 0;
-                  padding: 0;
-                  background: white;
-                }
-                
-                /* Ocultar todo lo que no sea el reporte */
-                body > *:not(.report-content) {
-                  display: none !important;
-                }
-                
-                /* Evitar cortes de página */
-                .section {
-                  page-break-inside: avoid;
-                }
-              }
-              
-              /* Para vista en pantalla (móviles) */
-              @media screen {
-                body {
-                  min-height: 100vh;
-                  display: flex;
-                  justify-content: center;
-                  align-items: flex-start;
-                  padding: 20px;
-                  background: #f5f5f5;
-                }
-                
-                .report-content {
-                  max-width: 210mm;
-                  width: 100%;
-                  background: white;
-                  box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="report-content">
-              ${tempContainer.innerHTML}
-            </div>
-          </body>
-        </html>
-      `);
-      iframeDoc.close();
-
-      // 6. Esperar a que cargue y luego imprimir
-      setTimeout(() => {
-        try {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-          
-          // 7. Limpiar
-          setTimeout(() => {
-            try {
-              document.body.removeChild(iframe);
-            } catch (e) {
-              console.error('Error al limpiar iframe:', e);
             }
-            onBack();
-          }, 500);
-        } catch (printError) {
-          console.error('Error al imprimir:', printError);
-          alert('Error al abrir el diálogo de impresión');
-          try {
-            document.body.removeChild(iframe);
-          } catch (e) {
-            console.error('Error al limpiar iframe:', e);
+          `;
+          document.head.appendChild(printStyle);
+          
+          // Imprimir
+          window.print();
+          
+          // Restaurar estilos del modal
+          Object.keys(originalModalStyles).forEach(key => {
+            previewModal.style[key] = originalModalStyles[key];
+          });
+          if (modalHeader) modalHeader.style.display = '';
+          if (modalContainer) {
+            modalContainer.style.maxWidth = '';
+            modalContainer.style.boxShadow = '';
+          }
+          
+          // Eliminar estilos temporales
+          const tempStyle = document.getElementById('print-style-temp');
+          if (tempStyle) {
+            tempStyle.remove();
           }
         }
-      }, 300);
+        
+        // Restaurar elementos ocultos
+        hiddenElements.forEach(element => {
+          element.style.display = '';
+        });
+        
+        // Volver a la pantalla anterior
+        onBack();
+      }
       
     } catch (error) {
       console.error('Error al guardar:', error);
@@ -476,7 +487,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
               <button 
                 onClick={() => setCurrentStep('form')}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="text-sm">Volver</span>
@@ -485,17 +496,17 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
               <button
                 onClick={handlePrintAndSave}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Guardando...</span>
+                    <span className="text-sm">Procesando...</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    <span className="text-sm">Imprimir y Guardar</span>
+                    <span className="text-sm">Guardar e Imprimir</span>
                   </>
                 )}
               </button>
@@ -503,13 +514,15 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
           </div>
 
           {/* Vista previa - con clase especial para capturar */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="report-to-print">
-              <ReportPreview
-                testConfig={testConfig}
-                formData={formData}
-                selectedPatient={selectedPatient}
-              />
+          <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
+            <div className="bg-white max-w-[210mm] mx-auto shadow-lg">
+              <div className="report-to-print">
+                <ReportPreview
+                  testConfig={testConfig}
+                  formData={formData}
+                  selectedPatient={selectedPatient}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -523,7 +536,10 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         
         <div className="bg-blue-600 text-white p-3 rounded-t-xl flex items-center justify-between flex-shrink-0">
           <div className="flex items-center">
-            <button onClick={onBack} className="mr-2 p-1 hover:bg-blue-700 rounded-full">
+            <button 
+              onClick={onBack} 
+              className="mr-2 p-1 hover:bg-blue-700 rounded-full transition-colors"
+            >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <h2 className="text-base font-semibold">{testConfig?.nombre || 'Generar Reporte'}</h2>
@@ -557,7 +573,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         <div className="border-t p-3 flex-shrink-0">
           <button
             onClick={handleGeneratePreview}
-            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
           >
             Vista Previa del Reporte
           </button>
