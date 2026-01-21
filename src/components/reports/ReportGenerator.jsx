@@ -267,7 +267,53 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ FUNCIÓN CORREGIDA: PC = window.print() sin pestañas | Móvil = PDF
+  // ✅ NUEVA FUNCIÓN: Solo guardar en BD sin imprimir
+  const handleSaveOnly = async () => {
+    setIsSaving(true);
+    try {
+      // Guardar en base de datos
+      let resultados = [];
+      
+      testConfig.subPruebas?.forEach((subPrueba) => {
+        const valor = formData[subPrueba._id];
+        if (valor) {
+          resultados.push({
+            subPruebaId: subPrueba._id,
+            clave: subPrueba.clave || subPrueba.nombre.toUpperCase(),
+            nombre: subPrueba.nombre,
+            valor: valor.toString(),
+            unidad: subPrueba.unidad || '',
+            referencia: subPrueba.valorReferencia || ''
+          });
+        }
+      });
+
+      const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
+
+      const reportData = {
+        pacienteId: formData.pacienteId,
+        pruebaId: testConfig._id,
+        fechaRealizacion: fechaHoraRealizacion.toISOString(),
+        resultados,
+        observaciones: formData.observaciones || '',
+        estado: 'completado',
+        solicitadoPor: 'A QUIEN CORRESPONDA'
+      };
+
+      await reportesAPI.create(reportData);
+      
+      alert('✅ Reporte guardado exitosamente');
+      onBack();
+      
+    } catch (error) {
+      console.error('Error al guardar:', error);
+      alert('❌ Error al guardar el reporte: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ✅ FUNCIÓN CORREGIDA: PC = iframe (método original) | Móvil = PDF
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -350,102 +396,54 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
 
         // Mensaje de éxito
         alert('✅ Reporte guardado y PDF descargado');
+        onBack();
         
       } else {
-        // ✅ PC: Usar window.print() SIN ABRIR PESTAÑAS
-        console.log('🖥️ Imprimiendo en PC (misma pestaña)...');
+        // ✅ PC: Usar método IFRAME original (que funcionaba)
+        console.log('🖥️ Imprimiendo en PC con iframe...');
         
-        // Ocultar todo excepto el reporte
-        const allElements = document.body.children;
-        const hiddenElements = [];
-        
-        // Ocultar todos los elementos excepto el modal del reporte
-        for (let i = 0; i < allElements.length; i++) {
-          const element = allElements[i];
-          if (!element.contains(reportElement)) {
-            element.style.display = 'none';
-            hiddenElements.push(element);
-          }
-        }
-        
-        // Ocultar el modal pero mostrar solo el contenido del reporte
-        const previewModal = reportElement.closest('.fixed');
-        if (previewModal) {
-          // Guardar estilos originales
-          const originalModalStyles = {
-            position: previewModal.style.position,
-            inset: previewModal.style.inset,
-            background: previewModal.style.background,
-            display: previewModal.style.display,
-            alignItems: previewModal.style.alignItems,
-            justifyContent: previewModal.style.justifyContent,
-            padding: previewModal.style.padding,
-            zIndex: previewModal.style.zIndex
-          };
+        // Crear iframe oculto
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+
+        // Escribir el contenido en el iframe
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>Reporte Médico</title>
+              <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+              <style>
+                @page { size: A4; margin: 0.5in; }
+                body { margin: 0; padding: 0; }
+                * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+              </style>
+            </head>
+            <body>
+              ${reportElement.innerHTML}
+            </body>
+          </html>
+        `);
+        iframeDoc.close();
+
+        // Esperar a que cargue y luego imprimir
+        setTimeout(() => {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
           
-          // Hacer el modal transparente y ocupar toda la pantalla
-          previewModal.style.position = 'static';
-          previewModal.style.inset = 'auto';
-          previewModal.style.background = 'white';
-          previewModal.style.padding = '0';
-          
-          // Ocultar header y botones del modal
-          const modalHeader = previewModal.querySelector('.bg-gray-50');
-          const modalContainer = previewModal.querySelector('.rounded-xl');
-          if (modalHeader) modalHeader.style.display = 'none';
-          if (modalContainer) {
-            modalContainer.style.maxWidth = '100%';
-            modalContainer.style.boxShadow = 'none';
-          }
-          
-          // Crear estilos de impresión
-          const printStyle = document.createElement('style');
-          printStyle.id = 'print-style-temp';
-          printStyle.innerHTML = `
-            @media print {
-              @page { 
-                size: A4; 
-                margin: 10mm; 
-              }
-              body { 
-                margin: 0; 
-                padding: 0;
-              }
-              * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-            }
-          `;
-          document.head.appendChild(printStyle);
-          
-          // Imprimir
-          window.print();
-          
-          // Restaurar estilos del modal
-          Object.keys(originalModalStyles).forEach(key => {
-            previewModal.style[key] = originalModalStyles[key];
-          });
-          if (modalHeader) modalHeader.style.display = '';
-          if (modalContainer) {
-            modalContainer.style.maxWidth = '';
-            modalContainer.style.boxShadow = '';
-          }
-          
-          // Eliminar estilos temporales
-          const tempStyle = document.getElementById('print-style-temp');
-          if (tempStyle) {
-            tempStyle.remove();
-          }
-        }
-        
-        // Restaurar elementos ocultos
-        hiddenElements.forEach(element => {
-          element.style.display = '';
-        });
-        
-        // Volver a la pantalla anterior
-        onBack();
+          // Limpiar
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            onBack();
+          }, 500);
+        }, 250);
       }
       
     } catch (error) {
@@ -483,33 +481,53 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
           
           {/* Header */}
           <div className="flex-shrink-0 bg-gray-50 border-b p-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
               <button 
                 onClick={() => setCurrentStep('form')}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="text-sm">Volver</span>
               </button>
               
-              <button
-                onClick={handlePrintAndSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Procesando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    <span className="text-sm">Guardar e Imprimir</span>
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <button
+                  onClick={handleSaveOnly}
+                  disabled={isSaving}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span className="text-sm">Solo Guardar</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handlePrintAndSave}
+                  disabled={isSaving}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span className="text-sm">Guardar e Imprimir</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
