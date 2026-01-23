@@ -283,10 +283,12 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             nombre: subPrueba.nombre,
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
-            referencia: subPrueba.valorReferencia || ''
+            referencia: subPrueba.valoresReferencia?.texto || ''  // ✅ CORREGIDO
           });
         }
       });
+
+      console.log('📊 Resultados a guardar:', resultados);
 
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
@@ -299,6 +301,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         estado: 'completado',
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
+
+      console.log('💾 Datos completos a guardar:', reportData);
 
       await reportesAPI.create(reportData);
       
@@ -329,10 +333,12 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             nombre: subPrueba.nombre,
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
-            referencia: subPrueba.valorReferencia || ''
+            referencia: subPrueba.valoresReferencia?.texto || ''  // ✅ CORREGIDO
           });
         }
       });
+
+      console.log('📊 Resultados a guardar:', resultados);
 
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
@@ -345,6 +351,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         estado: 'completado',
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
+
+      console.log('💾 Datos completos a guardar:', reportData);
 
       await reportesAPI.create(reportData);
       
