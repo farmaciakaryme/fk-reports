@@ -549,24 +549,36 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     }
   };
 
-  // ✅ REEMPLAZAR handleView - Ahora abre modal con PDF
+  // ✅ MODIFICADO: En móvil descarga directamente, en PC muestra vista previa
   const handleView = async (report) => {
     try {
-      setSuccessMessage('Generando vista previa...');
+      // Detectar si es móvil
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       
-      const pdf = await generatePDFFromReport(report);
-      
-      // Convertir a blob y crear URL
-      const blob = pdf.output('blob');
-      const url = URL.createObjectURL(blob);
-      
-      // Guardar URL en el reporte para el modal
-      setSelectedReport({ ...report, pdfUrl: url });
-      setShowViewModal(true);
-      setSuccessMessage('');
+      if (isMobile) {
+        // ✅ En móvil: descargar directamente (igual que handleDownload)
+        setSuccessMessage('Generando PDF...');
+        const pdf = await generatePDFFromReport(report);
+        const fileName = `reporte_${report.folio}_${report.datosPaciente?.nombre || 'paciente'}.pdf`;
+        pdf.save(fileName);
+        setSuccessMessage('PDF descargado correctamente');
+      } else {
+        // ✅ En PC: mostrar vista previa en modal
+        setSuccessMessage('Generando vista previa...');
+        const pdf = await generatePDFFromReport(report);
+        
+        // Convertir a blob y crear URL
+        const blob = pdf.output('blob');
+        const url = URL.createObjectURL(blob);
+        
+        // Guardar URL en el reporte para el modal
+        setSelectedReport({ ...report, pdfUrl: url });
+        setShowViewModal(true);
+        setSuccessMessage('');
+      }
     } catch (err) {
-      console.error('Error al generar vista previa:', err);
-      setError('Error al cargar la vista previa: ' + err.message);
+      console.error('Error al generar PDF:', err);
+      setError('Error al procesar el reporte: ' + err.message);
     }
   };
 
