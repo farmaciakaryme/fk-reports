@@ -1,36 +1,9 @@
 /* eslint-disable react/no-unknown-property */
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react/prop-types */
-import React from 'react';
 import firmaImg from '../../images/firma.png';
 
-// ✅ Convertir imagen a Base64 para compatibilidad con iframe
-const getBase64Image = (imgUrl) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = imgUrl;
-  });
-};
-
 const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
-  const [firmaBase64, setFirmaBase64] = React.useState(null);
-
-  React.useEffect(() => {
-    // Convertir firma a base64 al montar el componente
-    getBase64Image(firmaImg)
-      .then(base64 => setFirmaBase64(base64))
-      .catch(err => console.error('Error cargando firma:', err));
-  }, []);
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString + 'T00:00:00');
@@ -99,7 +72,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
   };
 
   return (
-    <div className="bg-white p-4 print:p-2" data-firma-base64={firmaBase64}>
+    <div className="bg-white p-4 print:p-2">
       <div className="max-w-4xl mx-auto bg-white border border-gray-300 shadow-lg p-4 print:p-2 print:shadow-none" style={{ fontFamily: 'Arial, sans-serif' }}>
         
         {/* Header con logo y título */}
@@ -206,12 +179,12 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
         <div className="my-6 print:my-4">
           <div className="text-center">
             <img 
-              src={firmaBase64 || firmaImg}
+              src={firmaImg} 
               alt="Firma Digital" 
               className="mx-auto h-24 print:h-20 object-contain mb-2"
               style={{ maxWidth: '300px' }}
             />
-            <div className="border-t border-gray-400 w-64 mx-auto"></div>
+            <div className=""></div>
           </div>
         </div>
 

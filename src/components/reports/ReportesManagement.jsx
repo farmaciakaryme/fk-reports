@@ -1,5 +1,6 @@
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react/prop-types */
+
 import { useState, useCallback, useEffect } from 'react';
 import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import UniversalNav from '../navigation/UniversalNav';
@@ -7,6 +8,7 @@ import ReportGenerator from './ReportGenerator';
 import ReportEditor from './ReportEditor';
 import BitacoraModal from './BitacoraModal';
 import { reportesAPI, pruebasAPI } from '../../services/api';
+
 
 // Reemplaza el componente TestSelectionModal en ReportesManagement.jsx
 

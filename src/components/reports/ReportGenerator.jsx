@@ -4,88 +4,60 @@ import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
 import { reportesAPI, pruebasAPI } from '../../services/api';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
-// ✅ FUNCIÓN AUXILIAR: Generar PDF usando método de impresión del navegador
-const generatePrintPDF = async (reportElement, firmaBase64) => {
-  return new Promise((resolve, reject) => {
-    try {
-      // Crear iframe oculto
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'absolute';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = 'none';
-      document.body.appendChild(iframe);
+// ✅ FUNCIÓN UNIFICADA: Generar y descargar PDF usando html2canvas + jsPDF
+const generateAndDownloadPDF = async (reportElement, selectedPatient, formData) => {
+  try {
+    console.log('📄 Generando PDF...');
+    
+    // Capturar el elemento como imagen
+    const canvas = await html2canvas(reportElement, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: reportElement.offsetWidth,
+      height: reportElement.offsetHeight,
+      windowWidth: reportElement.scrollWidth,
+      windowHeight: reportElement.scrollHeight
+    });
 
-      // Obtener el HTML del reporte
-      const reportHTML = reportElement.innerHTML;
-      
-      // Reemplazar la ruta de la imagen con base64
-      const htmlWithBase64 = firmaBase64 
-        ? reportHTML.replace(/src="[^"]*firma\.png[^"]*"/g, `src="${firmaBase64}"`)
-        : reportHTML;
+    // Crear PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-      // Escribir el contenido en el iframe
-      const iframeDoc = iframe.contentWindow.document;
-      iframeDoc.open();
-      iframeDoc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reporte Médico</title>
-            <script src="https://cdn.tailwindcss.com"></script>
-            <style>
-              @page { 
-                size: A4; 
-                margin: 0.5in; 
-              }
-              body { 
-                margin: 0; 
-                padding: 0; 
-                font-family: Arial, sans-serif;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              * { 
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              img {
-                max-width: 100%;
-                height: auto;
-              }
-            </style>
-          </head>
-          <body>
-            ${htmlWithBase64}
-          </body>
-        </html>
-      `);
-      iframeDoc.close();
+    const imgData = canvas.toDataURL('image/png');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      // Esperar a que Tailwind CSS se cargue y el contenido esté listo
-      setTimeout(() => {
-        try {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-          
-          // Limpiar después de un tiempo
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-            resolve();
-          }, 1000);
-        } catch (err) {
-          document.body.removeChild(iframe);
-          reject(err);
-        }
-      }, 1500); // Dar más tiempo para que Tailwind cargue
-      
-    } catch (err) {
-      reject(err);
+    // Si la imagen es más alta que la página, ajustar
+    if (imgHeight > pdfHeight) {
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pdfHeight);
+    } else {
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
     }
-  });
+
+    // Generar nombre de archivo
+    const fileName = `reporte_${selectedPatient?.nombre?.replace(/\s+/g, '_') || 'paciente'}_${formData.fecha}.pdf`;
+    
+    // Descargar
+    pdf.save(fileName);
+    
+    console.log('✅ PDF descargado:', fileName);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Error generando PDF:', error);
+    throw error;
+  }
 };
 
 // Componente de Formulario Dinámico (sin cambios)
@@ -261,6 +233,15 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [testConfig, setTestConfig] = useState(null);
   const [isLoadingTest, setIsLoadingTest] = useState(true);
+  const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: '' }
+
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   useEffect(() => {
     const loadTestConfig = async () => {
@@ -299,7 +280,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         }
       } catch (error) {
         console.error('Error al cargar configuración de prueba:', error);
-        alert('Error al cargar la configuración de la prueba');
+        setNotification({ type: 'error', message: 'Error al cargar la configuración de la prueba' });
       } finally {
         setIsLoadingTest(false);
       }
@@ -336,10 +317,11 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ FUNCIÓN: Solo guardar en BD sin imprimir
+  // ✅ NUEVA FUNCIÓN: Guardar Y descargar PDF (sin imprimir)
   const handleSaveOnly = async () => {
     setIsSaving(true);
     try {
+      // 1. Guardar en base de datos
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -370,17 +352,28 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
 
       await reportesAPI.create(reportData);
       
-      onBack();
+      // 2. Generar y descargar PDF
+      const reportElement = document.querySelector('.report-to-print');
+      if (!reportElement) {
+        alert('Error: No se encontró el reporte');
+        setIsSaving(false);
+        return;
+      }
+
+      await generateAndDownloadPDF(reportElement, selectedPatient, formData);
+      
+      setNotification({ type: 'success', message: 'Reporte guardado y PDF descargado' });
+      setTimeout(() => onBack(), 1500);
       
     } catch (error) {
       console.error('Error al guardar:', error);
-      alert('❌ Error al guardar el reporte: ' + error.message);
+      setNotification({ type: 'error', message: 'Error al guardar el reporte: ' + error.message });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ✅ FUNCIÓN CORREGIDA: Usar método unificado para PC y móvil
+  // ✅ FUNCIÓN: Guardar e Imprimir (PC = iframe print | Móvil = descargar PDF)
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -418,22 +411,66 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       // 2. Obtener el elemento del reporte
       const reportElement = document.querySelector('.report-to-print');
       if (!reportElement) {
-        alert('Error: No se encontró el reporte');
+        setNotification({ type: 'error', message: 'Error: No se encontró el reporte' });
         setIsSaving(false);
         return;
       }
 
-      // 3. Obtener firma en base64 del atributo data
-      const firmaBase64 = reportElement.getAttribute('data-firma-base64');
+      // 3. Detectar si es móvil
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      // 4. Usar método unificado de impresión (funciona igual en PC y móvil)
-      await generatePrintPDF(reportElement, firmaBase64);
+      if (isMobile) {
+        // ✅ MÓVIL: Descargar PDF directamente
+        await generateAndDownloadPDF(reportElement, selectedPatient, formData);
+        setNotification({ type: 'success', message: 'Reporte guardado y PDF descargado' });
+      } else {
+        // ✅ PC: Abrir diálogo de impresión (método que ya funciona)
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>Reporte Médico</title>
+              <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+              <style>
+                @page { size: A4; margin: 0.5in; }
+                body { margin: 0; padding: 0; }
+                * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+              </style>
+            </head>
+            <body>
+              ${reportElement.innerHTML}
+            </body>
+          </html>
+        `);
+        iframeDoc.close();
+
+        setTimeout(() => {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 500);
+        }, 250);
+        
+        setNotification({ type: 'success', message: 'Reporte guardado' });
+      }
       
-      onBack();
+      setTimeout(() => onBack(), 1500);
       
     } catch (error) {
       console.error('Error al guardar:', error);
-      alert('❌ Error al guardar el reporte: ' + error.message);
+      setNotification({ type: 'error', message: 'Error al guardar el reporte: ' + error.message });
     } finally {
       setIsSaving(false);
     }
@@ -464,6 +501,26 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
           
+          {/* Notification */}
+          {notification && (
+            <div className={`absolute top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
+              notification.type === 'success' 
+                ? 'bg-green-500 text-white' 
+                : 'bg-red-500 text-white'
+            }`}>
+              {notification.type === 'success' ? (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+              <span className="text-sm font-medium">{notification.message}</span>
+            </div>
+          )}
+          
           {/* Header */}
           <div className="flex-shrink-0 bg-gray-50 border-b p-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
@@ -490,7 +547,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
                   ) : (
                     <>
                       <Download className="w-4 h-4" />
-                      <span className="text-sm">Solo Guardar</span>
+                      <span className="text-sm">Guardar</span>
                     </>
                   )}
                 </button>
@@ -536,6 +593,26 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+        
+        {/* Notification */}
+        {notification && (
+          <div className={`absolute top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
+            notification.type === 'success' 
+              ? 'bg-green-500 text-white' 
+              : 'bg-red-500 text-white'
+          }`}>
+            {notification.type === 'success' ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            )}
+            <span className="text-sm font-medium">{notification.message}</span>
+          </div>
+        )}
         
         <div className="bg-blue-600 text-white p-3 rounded-t-xl flex items-center justify-between flex-shrink-0">
           <div className="flex items-center">
