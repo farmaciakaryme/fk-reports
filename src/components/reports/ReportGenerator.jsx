@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
+
 import { reportesAPI, pruebasAPI } from '../../services/api';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
