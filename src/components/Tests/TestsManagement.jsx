@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { FlaskConical, Plus, Loader2, AlertCircle } from 'lucide-react';
 import UniversalNav from '../navigation/UniversalNav';
 import { pruebasAPI } from '../../services/api';
-import TestModal from './components/testModal';
+import TestModal from './components/modaltest';
 import TestsTable from './components/TestsTable';
 
 const TestManagement = ({ currentUser, onLogout, onNavigate }) => {

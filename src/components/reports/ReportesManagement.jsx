@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react/prop-types */
 import { useState, useCallback, useEffect } from 'react';
 import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
@@ -6,6 +7,8 @@ import ReportGenerator from './ReportGenerator';
 import ReportEditor from './ReportEditor';
 import BitacoraModal from './BitacoraModal';
 import { reportesAPI, pruebasAPI } from '../../services/api';
+
+// Reemplaza el componente TestSelectionModal en ReportesManagement.jsx
 
 const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
   return (
@@ -37,10 +40,8 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
             </div>
           ) : pruebas.length > 0 ? (
             pruebas.map((prueba) => {
-              const isAvailable = 
-                prueba.codigo === 'ANTIDOPING' || 
-                prueba.codigo === 'ALCOHOLIMETRO' ||
-                prueba.codigo === 'HEM-BIOM689';
+              // ✅ CAMBIO: Ahora verificamos que tenga subPruebas en lugar de hardcodear códigos
+              const isAvailable = prueba.subPruebas && prueba.subPruebas.length > 0;
               
               return (
                 <button
@@ -53,15 +54,37 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
                       : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-60'
                   }`}
                 >
-                  <h3 className="text-base font-semibold text-blue-600 mb-1 font-poppins">{prueba.nombre}</h3>
-                  <p className="text-xs text-gray-600 mb-2 font-inter">{prueba.descripcion || prueba.codigo}</p>
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="text-base font-semibold text-blue-600 font-poppins">
+                      {prueba.nombre}
+                    </h3>
+                    {prueba.codigo && (
+                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded font-mono">
+                        {prueba.codigo}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <p className="text-xs text-gray-600 mb-2 font-inter line-clamp-2">
+                    {prueba.descripcion || 'Sin descripción'}
+                  </p>
+                  
                   {isAvailable ? (
-                    <p className="text-xs text-green-600 font-medium font-inter">
-                      ✓ {prueba.subPruebas?.length || 0} subprueba{prueba.subPruebas?.length > 1 ? 's' : ''} disponible{prueba.subPruebas?.length > 1 ? 's' : ''}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-green-600 font-medium font-inter">
+                          ✓ {prueba.subPruebas?.length || 0} subprueba{prueba.subPruebas?.length > 1 ? 's' : ''} disponible{prueba.subPruebas?.length > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      {prueba.categoria && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          {prueba.categoria}
+                        </span>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-xs text-gray-400 font-medium font-inter">
-                      Próximamente disponible
+                    <p className="text-xs text-orange-600 font-medium font-inter">
+                      ⚠️ No tiene subpruebas configuradas
                     </p>
                   )}
                 </button>
@@ -70,6 +93,9 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
           ) : (
             <div className="col-span-2 text-center py-8">
               <p className="text-gray-500 font-inter">No hay pruebas disponibles</p>
+              <p className="text-xs text-gray-400 mt-1 font-inter">
+                Crea pruebas en la sección de "Gestión de Pruebas"
+              </p>
             </div>
           )}
         </div>
