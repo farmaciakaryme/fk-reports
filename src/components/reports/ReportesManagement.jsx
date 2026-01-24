@@ -3,10 +3,9 @@ import { useState, useCallback, useEffect } from 'react';
 import { FileText, Eye, Edit2, Download, Trash2, X, Plus, BookOpen, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import UniversalNav from '../navigation/UniversalNav';
 import ReportGenerator from './ReportGenerator';
+import ReportEditor from './ReportEditor';
 import BitacoraModal from './BitacoraModal';
 import { reportesAPI, pruebasAPI } from '../../services/api';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
   return (
@@ -121,7 +120,7 @@ const ReportViewModal = ({ report, onClose, onDownload }) => {
             </div>
           </div>
           
-          {/* PDF Viewer - MEJORADO para ocupar todo el espacio disponible */}
+          {/* PDF Viewer */}
           <div className="flex-1 overflow-hidden bg-gray-100 min-h-0">
             <iframe
               src={report.pdfUrl}
@@ -135,7 +134,7 @@ const ReportViewModal = ({ report, onClose, onDownload }) => {
     );
   }
 
-  // Si no hay PDF, mostrar datos básicos (modal original)
+  // Si no hay PDF, mostrar datos básicos
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -238,7 +237,7 @@ const ReportRow = ({ report, onView, onEdit, onDownload, onDelete }) => {
           <button
             onClick={() => onDownload(report)}
             className="p-1.5 hover:bg-green-100 rounded transition-colors"
-            title="Descargar reporte"
+            title="Imprimir/Descargar"
           >
             <Download className="w-4 h-4 text-green-600" />
           </button>
@@ -336,6 +335,7 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const closeModal = () => {
     setActiveModal(null);
     setSelectedPrueba(null);
+    setSelectedReport(null);
     fetchReportes();
   };
 
@@ -352,7 +352,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     // Reconstruir valores de resultados
     console.log('📊 Resultados a procesar:', report.resultados);
     report.resultados?.forEach((resultado) => {
-      // Manejar tanto ObjectId de MongoDB como strings normales
       const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
       console.log(`  - ${resultado.nombre}: ${resultado.valor} (ID: ${subPruebaId})`);
       formData[subPruebaId] = resultado.valor;
@@ -373,13 +372,11 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     console.log('🔍 Reconstruyendo testConfig desde:', report);
     console.log('📊 Resultados guardados:', report.resultados);
     
-    // ESTRATEGIA 1: Si el reporte ya tiene la prueba poblada con subPruebas, usarla
     if (report.prueba?.subPruebas && report.prueba.subPruebas.length > 0) {
       console.log('✅ Usando prueba poblada con subPruebas');
       return report.prueba;
     }
 
-    // ESTRATEGIA 2: SIEMPRE intentar cargar la prueba completa desde la API para obtener referencias
     const pruebaId = report.prueba?.$oid || report.prueba?._id || report.prueba;
     
     if (pruebaId) {
@@ -388,11 +385,9 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         const response = await pruebasAPI.getById(pruebaId);
         console.log('✅ Respuesta de API:', response);
         
-        // ✅ CORRECCIÓN: La API devuelve {success: true, data: {...}}
         const pruebaCompleta = response.data || response;
         console.log('✅ Prueba extraída:', pruebaCompleta);
         
-        // IMPORTANTE: Verificar que tenga subPruebas
         if (pruebaCompleta.subPruebas && pruebaCompleta.subPruebas.length > 0) {
           console.log('✅ Usando prueba desde API con', pruebaCompleta.subPruebas.length, 'subPruebas');
           return pruebaCompleta;
@@ -404,7 +399,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       }
     }
 
-    // ESTRATEGIA 3 (FALLBACK): Construir desde resultados guardados SIN referencias
     console.log('⚠️ Usando fallback - construyendo desde resultados guardados');
     console.log('📊 Resultados disponibles:', report.resultados);
     
@@ -428,12 +422,13 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     };
   };
 
-  // ✅ NUEVA FUNCIÓN: Generar PDF desde reporte guardado
-  const generatePDFFromReport = async (report) => {
+  // ✅ ACTUALIZADO: Abrir diálogo de impresión en lugar de descargar PDF
+  const handleDownload = async (report) => {
     try {
-      console.log('🎯 Iniciando generación de PDF para reporte:', report.folio);
+      setSuccessMessage('Preparando reporte para impresión...');
       
-      // 1. Reconstruir testConfig y formData
+      console.log('🎯 Iniciando impresión de reporte:', report.folio);
+      
       console.log('📋 Paso 1: Reconstruyendo testConfig...');
       const testConfig = await reconstructTestConfigFromReport(report);
       console.log('✅ TestConfig reconstruido:', testConfig);
@@ -442,7 +437,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       const formData = reconstructFormDataFromReport(report);
       console.log('✅ FormData reconstruido:', formData);
       
-      // 2. Preparar datos del paciente
       const selectedPatient = {
         nombre: report.datosPaciente?.nombre || 'N/A',
         numeroExpediente: report.datosPaciente?.numeroExpediente || report.datosPaciente?.expediente || 'N/A',
@@ -450,22 +444,19 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       };
       console.log('✅ Datos del paciente:', selectedPatient);
 
-      // 3. Crear elemento temporal en el DOM
       console.log('📋 Paso 3: Creando elemento temporal...');
       const tempDiv = document.createElement('div');
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
       tempDiv.style.top = '0';
-      tempDiv.style.width = '794px'; // Ancho A4 en px
+      tempDiv.style.width = '794px';
       document.body.appendChild(tempDiv);
 
-      // 4. Importar React y ReactDOM dinámicamente
       console.log('📋 Paso 4: Importando módulos...');
       const React = (await import('react')).default;
       const ReactDOM = (await import('react-dom/client')).default;
       const ReportPreview = (await import('./ReportPreview')).default;
 
-      // 5. Renderizar ReportPreview
       console.log('📋 Paso 5: Renderizando ReportPreview...');
       const root = ReactDOM.createRoot(tempDiv);
       
@@ -477,114 +468,84 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
             selectedPatient
           })
         );
-        // Esperar renderizado
-        setTimeout(resolve, 1000); // Aumentado a 1 segundo
+        setTimeout(resolve, 1000);
       });
 
       console.log('✅ Contenido renderizado');
-      console.log('📄 HTML generado:', tempDiv.innerHTML.substring(0, 500));
 
-      // 6. Capturar con html2canvas
-      console.log('📋 Paso 6: Capturando con html2canvas...');
-      const canvas = await html2canvas(tempDiv.firstChild, {
-        scale: 2,
-        useCORS: true,
-        logging: true, // Activar logs de html2canvas
-        backgroundColor: '#ffffff',
-        windowWidth: 794,
-        windowHeight: 1123
-      });
-      console.log('✅ Canvas capturado:', canvas.width, 'x', canvas.height);
-
-      // 7. Generar PDF
-      console.log('📋 Paso 7: Generando PDF...');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      console.log('📐 Dimensiones PDF:', { pdfWidth, pdfHeight, imgWidth, imgHeight });
-
-      if (imgHeight > pdfHeight) {
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pdfHeight);
-      } else {
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      // Obtener el elemento del reporte
+      const reportElement = tempDiv.firstChild;
+      if (!reportElement) {
+        alert('Error: No se encontró el reporte');
+        root.unmount();
+        document.body.removeChild(tempDiv);
+        return;
       }
 
-      // 8. Limpiar
-      console.log('📋 Paso 8: Limpiando elementos temporales...');
-      root.unmount();
-      document.body.removeChild(tempDiv);
+      console.log('📋 Paso 6: Abriendo diálogo de impresión...');
+      
+      // Crear iframe oculto
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
 
-      console.log('✅ PDF generado exitosamente');
-      return pdf;
-      
-    } catch (error) {
-      console.error('❌ Error generando PDF:', error);
-      console.error('Stack trace:', error.stack);
-      throw error;
-    }
-  };
+      // Escribir el contenido en el iframe
+      const iframeDoc = iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Reporte Médico</title>
+            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+            <style>
+              @page { size: A4; margin: 0.5in; }
+              body { margin: 0; padding: 0; }
+              * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+            </style>
+          </head>
+          <body>
+            ${reportElement.innerHTML}
+          </body>
+        </html>
+      `);
+      iframeDoc.close();
 
-  // ✅ REEMPLAZAR handleDownload
-  const handleDownload = async (report) => {
-    try {
-      setSuccessMessage('Generando PDF...');
-      
-      const pdf = await generatePDFFromReport(report);
-      const fileName = `reporte_${report.folio}_${report.datosPaciente?.nombre || 'paciente'}.pdf`;
-      pdf.save(fileName);
-      
-      setSuccessMessage('PDF descargado correctamente');
-    } catch (err) {
-      console.error('Error al generar PDF:', err);
-      setError('Error al generar el PDF: ' + err.message);
-    }
-  };
-
-  // ✅ MODIFICADO: En móvil descarga directamente, en PC muestra vista previa
-  const handleView = async (report) => {
-    try {
-      // Detectar si es móvil
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      
-      if (isMobile) {
-        // ✅ En móvil: descargar directamente (igual que handleDownload)
-        setSuccessMessage('Generando PDF...');
-        const pdf = await generatePDFFromReport(report);
-        const fileName = `reporte_${report.folio}_${report.datosPaciente?.nombre || 'paciente'}.pdf`;
-        pdf.save(fileName);
-        setSuccessMessage('PDF descargado correctamente');
-      } else {
-        // ✅ En PC: mostrar vista previa en modal
-        setSuccessMessage('Generando vista previa...');
-        const pdf = await generatePDFFromReport(report);
+      // Esperar a que cargue y luego abrir diálogo de impresión
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
         
-        // Convertir a blob y crear URL
-        const blob = pdf.output('blob');
-        const url = URL.createObjectURL(blob);
+        // Limpiar después de un tiempo
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          root.unmount();
+          document.body.removeChild(tempDiv);
+        }, 1000);
         
-        // Guardar URL en el reporte para el modal
-        setSelectedReport({ ...report, pdfUrl: url });
-        setShowViewModal(true);
         setSuccessMessage('');
-      }
+      }, 250);
+      
     } catch (err) {
-      console.error('Error al generar PDF:', err);
-      setError('Error al procesar el reporte: ' + err.message);
+      console.error('Error al preparar reporte:', err);
+      setError('Error al preparar el reporte: ' + err.message);
     }
   };
 
+  // ✅ ACTUALIZADO: handleView también usa iframe + print
+  const handleView = async (report) => {
+    // Simplemente reutilizar handleDownload ya que ahora hace lo mismo
+    handleDownload(report);
+  };
+
+  // ✅ MODIFICADO: Ahora abre el modal de edición con ReportEditor
   const handleEdit = (report) => {
+    console.log('✏️ Editando reporte:', report);
     setSelectedReport(report);
-    setSelectedPrueba(report.prueba || report.datosPrueba);
     setActiveModal('edit');
   };
 
@@ -779,7 +740,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         <ReportViewModal
           report={selectedReport}
           onClose={() => {
-            // Limpiar URL del blob si existe
             if (selectedReport.pdfUrl) {
               URL.revokeObjectURL(selectedReport.pdfUrl);
             }
@@ -790,10 +750,19 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         />
       )}
 
+      {/* ✅ Modal de creación de nuevo reporte */}
       {activeModal === 'report' && (
         <ReportGenerator
           onBack={closeModal}
           pruebaData={selectedPrueba}
+        />
+      )}
+
+      {/* ✅ Modal de edición de reporte existente */}
+      {activeModal === 'edit' && selectedReport && (
+        <ReportEditor
+          onBack={closeModal}
+          reportToEdit={selectedReport}
         />
       )}
     </div>

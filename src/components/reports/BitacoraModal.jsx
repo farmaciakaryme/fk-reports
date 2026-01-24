@@ -12,17 +12,6 @@ const BitacoraModal = ({ onClose }) => {
 
   useEffect(() => {
     fetchAllReportes();
-    
-    // BLINDAJE: Eliminar duplicados del DOM
-    const duplicates = document.querySelectorAll('#bitacora-print-area');
-    if (duplicates.length > 1) {
-      console.warn('⚠️ Bitácora duplicada detectada. Limpiando...');
-      duplicates.forEach((el, i) => {
-        if (i !== 0) {
-          el.remove();
-        }
-      });
-    }
   }, []);
 
   const fetchAllReportes = async () => {
@@ -135,57 +124,149 @@ const BitacoraModal = ({ onClose }) => {
   const datosAgrupados = agruparReportesInteligente(reportesFiltrados);
   const pacientesUnicos = new Set(datosAgrupados.map(d => d.nombre)).size;
 
-  // SOLUCIÓN: Generar UNA SOLA PÁGINA siempre
+  // ✅ Generar múltiples páginas automáticamente
   const FILAS_POR_PAGINA = 20;
-  const filasPagina = [...Array(FILAS_POR_PAGINA)].map((_, index) => {
-    if (index < datosAgrupados.length) {
-      return datosAgrupados[index];
+  
+  const generarPaginas = () => {
+    const paginas = [];
+    const totalRegistros = datosAgrupados.length;
+    const totalPaginas = Math.ceil(totalRegistros / FILAS_POR_PAGINA);
+    
+    for (let paginaNum = 0; paginaNum < Math.max(1, totalPaginas); paginaNum++) {
+      const inicio = paginaNum * FILAS_POR_PAGINA;
+      const fin = inicio + FILAS_POR_PAGINA;
+      
+      const filasPagina = [...Array(FILAS_POR_PAGINA)].map((_, index) => {
+        const indiceGlobal = inicio + index;
+        if (indiceGlobal < datosAgrupados.length) {
+          return datosAgrupados[indiceGlobal];
+        }
+        return { fecha: '', hora: '', nombre: '', edad: '', motivos: [] };
+      });
+      
+      paginas.push(filasPagina);
     }
-    return { fecha: '', hora: '', nombre: '', edad: '', motivos: [] };
-  });
+    
+    return paginas;
+  };
+  
+  const paginas = generarPaginas();
 
- const abrirPanelImpresion = () => {
-  const printContents = document.getElementById('bitacora-print-area').outerHTML;
-  const originalContents = document.body.innerHTML;
+  const abrirPanelImpresion = () => {
+    console.log('🖨️ Abriendo diálogo de impresión de bitácora...');
+    
+    // Obtener el contenido a imprimir
+    const printContent = document.getElementById('bitacora-print-area');
+    if (!printContent) {
+      alert('Error: No se encontró el contenido de la bitácora');
+      return;
+    }
 
-  document.body.innerHTML = printContents;
-  window.print();
-  document.body.innerHTML = originalContents;
-  window.location.reload();
-};
+    // Crear iframe oculto
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
 
+    // Escribir el contenido en el iframe
+    const iframeDoc = iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Bitácora de Atención</title>
+          <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+          <style>
+            @page {
+              size: letter portrait;
+              margin: 0.5in;
+            }
+            
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: Arial, sans-serif;
+            }
+            
+            /* Cada página debe tener altura controlada */
+            .bitacora-page {
+              min-height: 9.5in;
+              max-height: 9.5in;
+              display: flex;
+              flex-direction: column;
+              position: relative;
+            }
+            
+            .page-break {
+              page-break-after: always;
+              break-after: page;
+            }
+            
+            .page-break:last-child {
+              page-break-after: auto;
+              break-after: auto;
+            }
+            
+            /* Contenedor del contenido */
+            .bitacora-content {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+            }
+            
+            /* Las firmas siempre al final de la página */
+            .firmas-section {
+              margin-top: auto;
+              padding-top: 2rem;
+            }
+            
+            /* Asegurar altura fija de filas */
+            tbody tr {
+              height: 24px;
+            }
+            
+            * {
+              print-color-adjust: exact !important;
+              -webkit-print-color-adjust: exact !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    // Esperar a que cargue y luego abrir diálogo de impresión
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      
+      // Limpiar iframe después de un tiempo
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
+  };
 
   return (
     <>
-        <style>{`
-@media print {
-  body * {
-    visibility: hidden !important;
-  }
+      <style>{`
+.page-break {
+  page-break-after: always;
+  break-after: page;
+}
 
-  #bitacora-print-area, 
-  #bitacora-print-area * {
-    visibility: visible !important;
-  }
-
-  #bitacora-print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-
-  @page {
-    size: letter portrait;
-    margin: 0.5in;
-  }
+.page-break:last-child {
+  page-break-after: auto;
+  break-after: auto;
 }
 `}</style>
-
 
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col">
@@ -243,15 +324,16 @@ const BitacoraModal = ({ onClose }) => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-visible">
-            <div className="text-center mb-4 sm:mb-6 no-print">
-                    <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-2">
-                      BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
-                    </h3>
-                    <p className="text-xs sm:text-sm text-gray-600">
-                      Mostrando {pacientesUnicos} pacientes únicos ({datosAgrupados.length} registros)
-                    </p>
-                  </div>
+          <div className="flex-1 overflow-auto">
+            <div className="text-center mb-4 sm:mb-6 p-4 no-print">
+              <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-2">
+                BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-600">
+                Mostrando {pacientesUnicos} pacientes únicos ({datosAgrupados.length} registros) - {paginas.length + 1} página{paginas.length + 1 !== 1 ? 's' : ''}
+              </p>
+            </div>
+            
             {isLoading ? (
               <div className="flex items-center justify-center h-full no-print">
                 <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-blue-600" />
@@ -259,67 +341,98 @@ const BitacoraModal = ({ onClose }) => {
             ) : error ? (
               <div className="p-4 text-red-600 text-xs sm:text-sm no-print">Error: {error}</div>
             ) : (
-              <div id="bitacora-print-area" className="h-full overflow-visible">
-                <div className="p-3 sm:p-6">
-                  
+              <div id="bitacora-print-area">
+                {/* ✅ Renderizar TODAS las páginas con tablas */}
+                {paginas.map((filasPagina, indexPagina) => (
+                  <div key={indexPagina} className="bitacora-page page-break">
+                    <div className="p-3 sm:p-6">
+                      <div className="flex items-start justify-between mb-3 sm:mb-4">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-gray-300 rounded-lg"></div>
+                        <div className="text-right text-xs sm:text-sm text-gray-500 italic">
+                          SALUD AL ALCANCE DE TODOS®
+                        </div>
+                      </div>
 
-                  {/* UNA SOLA PÁGINA - SIN MAP */}
-                  <div>
-                    <div className="flex items-start justify-between mb-3 sm:mb-4">
+                      <h1 className="text-center text-xs sm:text-sm font-bold text-blue-700 mb-3 sm:mb-4">
+                        BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
+                      </h1>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse border border-gray-800">
+                          <thead>
+                            <tr>
+                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">FECHA</th>
+                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">HORA</th>
+                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">NOMBRE</th>
+                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">EDAD</th>
+                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">MOTIVO</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filasPagina.map((item, index) => (
+                              <tr key={index}>
+                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
+                                  {item.fecha}
+                                </td>
+                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
+                                  {item.hora}
+                                </td>
+                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px]" style={{ height: '24px' }}>
+                                  {item.nombre}
+                                </td>
+                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
+                                  {item.edad}
+                                </td>
+                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px]" style={{ height: '24px' }}>
+                                  {item.motivos.join(', ')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Número de página */}
+                      <div className="text-center mt-4 text-xs text-gray-500">
+                        Página {indexPagina + 1} de {paginas.length}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* ✅ Página FINAL solo con firmas */}
+                <div className="bitacora-page">
+                  <div className="p-3 sm:p-6 h-full flex flex-col justify-center">
+                    <div className="flex items-start justify-between mb-8">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-gray-300 rounded-lg"></div>
                       <div className="text-right text-xs sm:text-sm text-gray-500 italic">
                         SALUD AL ALCANCE DE TODOS®
                       </div>
                     </div>
 
-                    <h1 className="text-center text-xs sm:text-sm font-bold text-blue-700 mb-3 sm:mb-4">
+                    <h1 className="text-center text-xs sm:text-sm font-bold text-blue-700 mb-12">
                       BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
                     </h1>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse border border-gray-800">
-                        <thead>
-                          <tr>
-                            <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">FECHA</th>
-                            <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">HORA</th>
-                            <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">NOMBRE</th>
-                            <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">EDAD</th>
-                            <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">MOTIVO</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filasPagina.map((item, index) => (
-                            <tr key={index}>
-                              <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
-                                {item.fecha}
-                              </td>
-                              <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
-                                {item.hora}
-                              </td>
-                              <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px]" style={{ height: '24px' }}>
-                                {item.nombre}
-                              </td>
-                              <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
-                                {item.edad}
-                              </td>
-                              <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px]" style={{ height: '24px' }}>
-                                {item.motivos.join(', ')}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="w-full max-w-4xl">
+                        <div className="flex justify-around items-end">
+                          <div className="text-center">
+                            <div className="border-t-2 border-gray-800 w-48 mb-2"></div>
+                            <p className="text-xs font-bold">Dr. Seguridad Pública</p>
+                            <p className="text-[10px] text-gray-600 mt-1">Firma y Sello</p>
+                          </div>
+                          <div className="text-center">
+                            <div className="border-t-2 border-gray-800 w-48 mb-2"></div>
+                            <p className="text-xs font-bold">Responsable Médico</p>
+                            <p className="text-[10px] text-gray-600 mt-1">Firma y Sello</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex justify-between items-end mt-8 sm:mt-12">
-                      <div className="text-center">
-                        <div className="border-t-2 border-gray-800 w-32 sm:w-48 mb-1"></div>
-                        <p className="text-[11px] sm:text-xs font-bold">Dr. Seguridad Pública</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="border-t-2 border-gray-800 w-32 sm:w-48 mb-1"></div>
-                        <p className="text-[11px] sm:text-xs font-bold">Responsable Médico</p>
-                      </div>
+                    <div className="text-center mt-8 text-xs text-gray-500">
+                      Página {paginas.length + 1} de {paginas.length + 1}
                     </div>
                   </div>
                 </div>
