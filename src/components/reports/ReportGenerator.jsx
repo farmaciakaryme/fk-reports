@@ -3,64 +3,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
+
 import { reportesAPI, pruebasAPI } from '../../services/api';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// ✅ FUNCIÓN UNIFICADA: Generar y descargar PDF usando html2canvas + jsPDF
-const generateAndDownloadPDF = async (reportElement, selectedPatient, formData) => {
-  try {
-    console.log('📄 Generando PDF...');
-    
-    // Capturar el elemento como imagen
-    const canvas = await html2canvas(reportElement, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      width: reportElement.offsetWidth,
-      height: reportElement.offsetHeight,
-      windowWidth: reportElement.scrollWidth,
-      windowHeight: reportElement.scrollHeight
-    });
-
-    // Crear PDF
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    // Si la imagen es más alta que la página, ajustar
-    if (imgHeight > pdfHeight) {
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pdfHeight);
-    } else {
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    }
-
-    // Generar nombre de archivo
-    const fileName = `reporte_${selectedPatient?.nombre?.replace(/\s+/g, '_') || 'paciente'}_${formData.fecha}.pdf`;
-    
-    // Descargar
-    pdf.save(fileName);
-    
-    console.log('✅ PDF descargado:', fileName);
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Error generando PDF:', error);
-    throw error;
-  }
-};
-
-// Componente de Formulario Dinámico (sin cambios)
+// Componente de Formulario Dinámico
 const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }) => {
   if (!testConfig) return null;
 
@@ -233,15 +181,18 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [testConfig, setTestConfig] = useState(null);
   const [isLoadingTest, setIsLoadingTest] = useState(true);
-  const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: '' }
 
-  // Auto-hide notification after 3 seconds
   useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => setNotification(null), 3000);
-      return () => clearTimeout(timer);
+    if (currentStep === 'preview') {
+      const modalPreview = document.querySelector('.print-hide-modal .report-preview');
+      if (modalPreview) modalPreview.style.display = 'none';
     }
-  }, [notification]);
+
+    return () => {
+      const modalPreview = document.querySelector('.print-hide-modal .report-preview');
+      if (modalPreview) modalPreview.style.display = '';
+    };
+  }, [currentStep]);
 
   useEffect(() => {
     const loadTestConfig = async () => {
@@ -280,7 +231,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         }
       } catch (error) {
         console.error('Error al cargar configuración de prueba:', error);
-        setNotification({ type: 'error', message: 'Error al cargar la configuración de la prueba' });
+        setErrors(['Error al cargar la configuración de la prueba']);
       } finally {
         setIsLoadingTest(false);
       }
@@ -317,11 +268,11 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ NUEVA FUNCIÓN: Guardar Y descargar PDF (sin imprimir)
   const handleSaveOnly = async () => {
     setIsSaving(true);
+    setErrors([]);
+    
     try {
-      // 1. Guardar en base de datos
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -351,31 +302,20 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       };
 
       await reportesAPI.create(reportData);
-      
-      // 2. Generar y descargar PDF
-      const reportElement = document.querySelector('.report-to-print');
-      if (!reportElement) {
-        alert('Error: No se encontró el reporte');
-        setIsSaving(false);
-        return;
-      }
-
-      await generateAndDownloadPDF(reportElement, selectedPatient, formData);
-      
-      setNotification({ type: 'success', message: 'Reporte guardado y PDF descargado' });
-      setTimeout(() => onBack(), 1500);
+      onBack();
       
     } catch (error) {
       console.error('Error al guardar:', error);
-      setNotification({ type: 'error', message: 'Error al guardar el reporte: ' + error.message });
+      setErrors(['Error al guardar el reporte. Por favor, intenta nuevamente.']);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ✅ FUNCIÓN: Guardar e Imprimir (PC = iframe print | Móvil = descargar PDF con html2canvas)
   const handlePrintAndSave = async () => {
     setIsSaving(true);
+    setErrors([]);
+    
     try {
       // 1. Guardar en base de datos
       let resultados = [];
@@ -411,7 +351,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       // 2. Obtener el elemento del reporte
       const reportElement = document.querySelector('.report-to-print');
       if (!reportElement) {
-        setNotification({ type: 'error', message: 'Error: No se encontró el reporte' });
+        setErrors(['No se pudo generar el reporte. Por favor, intenta nuevamente.']);
         setIsSaving(false);
         return;
       }
@@ -420,17 +360,45 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        // ✅ MÓVIL: Descargar PDF con html2canvas (MÉTODO ORIGINAL QUE FUNCIONABA)
-        console.log('📱 Generando PDF para móvil...');
+        // MÓVIL: Generar PDF sin cargar recursos externos
+        const clonedElement = reportElement.cloneNode(true);
         
-        const canvas = await html2canvas(reportElement, {
+        // Crear contenedor temporal
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-99999px';
+        tempContainer.style.top = '0';
+        tempContainer.style.width = '794px';
+        tempContainer.style.backgroundColor = '#ffffff';
+        tempContainer.appendChild(clonedElement);
+        document.body.appendChild(tempContainer);
+
+        // Aplicar estilos inline para asegurar renderizado
+        const allElements = clonedElement.querySelectorAll('*');
+        allElements.forEach(el => {
+          const styles = window.getComputedStyle(el);
+          el.style.fontFamily = styles.fontFamily || 'Arial, sans-serif';
+          el.style.fontSize = styles.fontSize;
+          el.style.color = styles.color;
+          el.style.backgroundColor = styles.backgroundColor;
+          el.style.padding = styles.padding;
+          el.style.margin = styles.margin;
+          el.style.border = styles.border;
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const canvas = await html2canvas(clonedElement, {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           logging: false,
           backgroundColor: '#ffffff',
           windowWidth: 794,
           windowHeight: 1123
         });
+
+        document.body.removeChild(tempContainer);
 
         const pdf = new jsPDF({
           orientation: 'portrait',
@@ -450,14 +418,13 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
           pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
         }
 
-        const fileName = `reporte_${selectedPatient?.nombre || 'paciente'}_${formData.fecha}.pdf`;
+        const fileName = `reporte_${selectedPatient?.nombre?.replace(/\s+/g, '_') || 'paciente'}_${formData.fecha}.pdf`;
         pdf.save(fileName);
 
-        setNotification({ type: 'success', message: 'Reporte guardado y PDF descargado' });
-      } else {
-        // ✅ PC: Abrir diálogo de impresión (método que ya funciona)
-        console.log('🖥️ Imprimiendo en PC con iframe...');
+        onBack();
         
+      } else {
+        // PC: Usar método IFRAME
         const iframe = document.createElement('iframe');
         iframe.style.position = 'absolute';
         iframe.style.width = '0';
@@ -493,17 +460,14 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
           
           setTimeout(() => {
             document.body.removeChild(iframe);
+            onBack();
           }, 500);
         }, 250);
-        
-        setNotification({ type: 'success', message: 'Reporte guardado' });
       }
       
-      setTimeout(() => onBack(), 1500);
-      
     } catch (error) {
-      console.error('Error al guardar:', error);
-      setNotification({ type: 'error', message: 'Error al guardar el reporte: ' + error.message });
+      console.error('Error al procesar:', error);
+      setErrors(['Error al procesar el reporte. Por favor, intenta nuevamente.']);
     } finally {
       setIsSaving(false);
     }
@@ -534,26 +498,6 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
           
-          {/* Notification */}
-          {notification && (
-            <div className={`absolute top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
-              notification.type === 'success' 
-                ? 'bg-green-500 text-white' 
-                : 'bg-red-500 text-white'
-            }`}>
-              {notification.type === 'success' ? (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              )}
-              <span className="text-sm font-medium">{notification.message}</span>
-            </div>
-          )}
-          
           {/* Header */}
           <div className="flex-shrink-0 bg-gray-50 border-b p-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
@@ -580,7 +524,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
                   ) : (
                     <>
                       <Download className="w-4 h-4" />
-                      <span className="text-sm">Guardar</span>
+                      <span className="text-sm">Solo Guardar</span>
                     </>
                   )}
                 </button>
@@ -626,26 +570,6 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
-        
-        {/* Notification */}
-        {notification && (
-          <div className={`absolute top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
-            notification.type === 'success' 
-              ? 'bg-green-500 text-white' 
-              : 'bg-red-500 text-white'
-          }`}>
-            {notification.type === 'success' ? (
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            )}
-            <span className="text-sm font-medium">{notification.message}</span>
-          </div>
-        )}
         
         <div className="bg-blue-600 text-white p-3 rounded-t-xl flex items-center justify-between flex-shrink-0">
           <div className="flex items-center">
