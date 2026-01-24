@@ -3,12 +3,92 @@ import { useState, useCallback, useEffect } from 'react';
 import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
-
 import { reportesAPI, pruebasAPI } from '../../services/api';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
-// Componente de Formulario Dinámico
+// ✅ FUNCIÓN AUXILIAR: Generar PDF usando método de impresión del navegador
+const generatePrintPDF = async (reportElement, firmaBase64) => {
+  return new Promise((resolve, reject) => {
+    try {
+      // Crear iframe oculto
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+
+      // Obtener el HTML del reporte
+      const reportHTML = reportElement.innerHTML;
+      
+      // Reemplazar la ruta de la imagen con base64
+      const htmlWithBase64 = firmaBase64 
+        ? reportHTML.replace(/src="[^"]*firma\.png[^"]*"/g, `src="${firmaBase64}"`)
+        : reportHTML;
+
+      // Escribir el contenido en el iframe
+      const iframeDoc = iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Reporte Médico</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+              @page { 
+                size: A4; 
+                margin: 0.5in; 
+              }
+              body { 
+                margin: 0; 
+                padding: 0; 
+                font-family: Arial, sans-serif;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              * { 
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              img {
+                max-width: 100%;
+                height: auto;
+              }
+            </style>
+          </head>
+          <body>
+            ${htmlWithBase64}
+          </body>
+        </html>
+      `);
+      iframeDoc.close();
+
+      // Esperar a que Tailwind CSS se cargue y el contenido esté listo
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          
+          // Limpiar después de un tiempo
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            resolve();
+          }, 1000);
+        } catch (err) {
+          document.body.removeChild(iframe);
+          reject(err);
+        }
+      }, 1500); // Dar más tiempo para que Tailwind cargue
+      
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+// Componente de Formulario Dinámico (sin cambios)
 const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }) => {
   if (!testConfig) return null;
 
@@ -183,18 +263,6 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
   const [isLoadingTest, setIsLoadingTest] = useState(true);
 
   useEffect(() => {
-    if (currentStep === 'preview') {
-      const modalPreview = document.querySelector('.print-hide-modal .report-preview');
-      if (modalPreview) modalPreview.style.display = 'none';
-    }
-
-    return () => {
-      const modalPreview = document.querySelector('.print-hide-modal .report-preview');
-      if (modalPreview) modalPreview.style.display = '';
-    };
-  }, [currentStep]);
-
-  useEffect(() => {
     const loadTestConfig = async () => {
       if (!pruebaData) {
         setIsLoadingTest(false);
@@ -268,11 +336,10 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ NUEVA FUNCIÓN: Solo guardar en BD sin imprimir
+  // ✅ FUNCIÓN: Solo guardar en BD sin imprimir
   const handleSaveOnly = async () => {
     setIsSaving(true);
     try {
-      // Guardar en base de datos
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -284,12 +351,10 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             nombre: subPrueba.nombre,
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
-            referencia: subPrueba.valoresReferencia?.texto || ''  // ✅ CORREGIDO
+            referencia: subPrueba.valoresReferencia?.texto || ''
           });
         }
       });
-
-      console.log('📊 Resultados a guardar:', resultados);
 
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
@@ -303,11 +368,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
-      console.log('💾 Datos completos a guardar:', reportData);
-
       await reportesAPI.create(reportData);
       
-      alert('✅ Reporte guardado exitosamente');
       onBack();
       
     } catch (error) {
@@ -318,7 +380,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     }
   };
 
-  // ✅ FUNCIÓN CORREGIDA: PC = iframe (método original) | Móvil = PDF
+  // ✅ FUNCIÓN CORREGIDA: Usar método unificado para PC y móvil
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -334,12 +396,10 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             nombre: subPrueba.nombre,
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
-            referencia: subPrueba.valoresReferencia?.texto || ''  // ✅ CORREGIDO
+            referencia: subPrueba.valoresReferencia?.texto || ''
           });
         }
       });
-
-      console.log('📊 Resultados a guardar:', resultados);
 
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
@@ -353,8 +413,6 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
-      console.log('💾 Datos completos a guardar:', reportData);
-
       await reportesAPI.create(reportData);
       
       // 2. Obtener el elemento del reporte
@@ -365,95 +423,13 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         return;
       }
 
-      // 3. Detectar si es móvil
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      // 3. Obtener firma en base64 del atributo data
+      const firmaBase64 = reportElement.getAttribute('data-firma-base64');
 
-      if (isMobile) {
-        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF
-        console.log('📱 Generando PDF para móvil...');
-        
-        const canvas = await html2canvas(reportElement, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: 794,
-          windowHeight: 1123
-        });
-
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = pdfWidth;
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-        if (imgHeight > pdfHeight) {
-          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pdfHeight);
-        } else {
-          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-        }
-
-        // Guardar el PDF localmente
-        const fileName = `reporte_${selectedPatient?.nombre || 'paciente'}_${formData.fecha}.pdf`;
-        pdf.save(fileName);
-
-        // Mensaje de éxito
-        alert('✅ Reporte guardado y PDF descargado');
-        onBack();
-        
-      } else {
-        // ✅ PC: Usar método IFRAME original (que funcionaba)
-        console.log('🖥️ Imprimiendo en PC con iframe...');
-        
-        // Crear iframe oculto
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = 'none';
-        document.body.appendChild(iframe);
-
-        // Escribir el contenido en el iframe
-        const iframeDoc = iframe.contentWindow.document;
-        iframeDoc.open();
-        iframeDoc.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <title>Reporte Médico</title>
-              <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-              <style>
-                @page { size: A4; margin: 0.5in; }
-                body { margin: 0; padding: 0; }
-                * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
-              </style>
-            </head>
-            <body>
-              ${reportElement.innerHTML}
-            </body>
-          </html>
-        `);
-        iframeDoc.close();
-
-        // Esperar a que cargue y luego imprimir
-        setTimeout(() => {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-          
-          // Limpiar
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-            onBack();
-          }, 500);
-        }, 250);
-      }
+      // 4. Usar método unificado de impresión (funciona igual en PC y móvil)
+      await generatePrintPDF(reportElement, firmaBase64);
+      
+      onBack();
       
     } catch (error) {
       console.error('Error al guardar:', error);
@@ -540,7 +516,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             </div>
           </div>
 
-          {/* Vista previa - con clase especial para capturar */}
+          {/* Vista previa */}
           <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
             <div className="bg-white max-w-[210mm] mx-auto shadow-lg">
               <div className="report-to-print">
