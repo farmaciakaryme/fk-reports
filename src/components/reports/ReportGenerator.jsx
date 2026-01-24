@@ -373,7 +373,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     }
   };
 
-  // ✅ FUNCIÓN: Guardar e Imprimir (PC = iframe print | Móvil = descargar PDF)
+  // ✅ FUNCIÓN: Guardar e Imprimir (PC = iframe print | Móvil = descargar PDF con html2canvas)
   const handlePrintAndSave = async () => {
     setIsSaving(true);
     try {
@@ -420,11 +420,44 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        // ✅ MÓVIL: Descargar PDF directamente
-        await generateAndDownloadPDF(reportElement, selectedPatient, formData);
+        // ✅ MÓVIL: Descargar PDF con html2canvas (MÉTODO ORIGINAL QUE FUNCIONABA)
+        console.log('📱 Generando PDF para móvil...');
+        
+        const canvas = await html2canvas(reportElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: 794,
+          windowHeight: 1123
+        });
+
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        if (imgHeight > pdfHeight) {
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, pdfHeight);
+        } else {
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+        }
+
+        const fileName = `reporte_${selectedPatient?.nombre || 'paciente'}_${formData.fecha}.pdf`;
+        pdf.save(fileName);
+
         setNotification({ type: 'success', message: 'Reporte guardado y PDF descargado' });
       } else {
         // ✅ PC: Abrir diálogo de impresión (método que ya funciona)
+        console.log('🖥️ Imprimiendo en PC con iframe...');
+        
         const iframe = document.createElement('iframe');
         iframe.style.position = 'absolute';
         iframe.style.width = '0';
