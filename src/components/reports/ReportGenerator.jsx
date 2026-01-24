@@ -231,7 +231,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         }
       } catch (error) {
         console.error('Error al cargar configuración de prueba:', error);
-        setErrors(['Error al cargar la configuración de la prueba']);
+        alert('Error al cargar la configuración de la prueba');
       } finally {
         setIsLoadingTest(false);
       }
@@ -268,11 +268,11 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
+  // ✅ NUEVA FUNCIÓN: Solo guardar en BD sin imprimir
   const handleSaveOnly = async () => {
     setIsSaving(true);
-    setErrors([]);
-    
     try {
+      // Guardar en base de datos
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -289,6 +289,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         }
       });
 
+      console.log('📊 Resultados a guardar:', resultados);
+
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
       const reportData = {
@@ -301,21 +303,24 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
+      console.log('💾 Datos completos a guardar:', reportData);
+
       await reportesAPI.create(reportData);
+      
+      alert('✅ Reporte guardado exitosamente');
       onBack();
       
     } catch (error) {
       console.error('Error al guardar:', error);
-      setErrors(['Error al guardar el reporte. Por favor, intenta nuevamente.']);
+      alert('❌ Error al guardar el reporte: ' + error.message);
     } finally {
       setIsSaving(false);
     }
   };
 
+  // ✅ FUNCIÓN CORREGIDA: PC = iframe (método original) | Móvil = PDF
   const handlePrintAndSave = async () => {
     setIsSaving(true);
-    setErrors([]);
-    
     try {
       // 1. Guardar en base de datos
       let resultados = [];
@@ -334,6 +339,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         }
       });
 
+      console.log('📊 Resultados a guardar:', resultados);
+
       const fechaHoraRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
 
       const reportData = {
@@ -346,12 +353,14 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         solicitadoPor: 'A QUIEN CORRESPONDA'
       };
 
+      console.log('💾 Datos completos a guardar:', reportData);
+
       await reportesAPI.create(reportData);
       
       // 2. Obtener el elemento del reporte
       const reportElement = document.querySelector('.report-to-print');
       if (!reportElement) {
-        setErrors(['No se pudo generar el reporte. Por favor, intenta nuevamente.']);
+        alert('Error: No se encontró el reporte');
         setIsSaving(false);
         return;
       }
@@ -360,45 +369,27 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        // MÓVIL: Generar PDF sin cargar recursos externos
-        const clonedElement = reportElement.cloneNode(true);
+        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF - CORREGIDO para evitar "load failed"
+        console.log('📱 Generando PDF para móvil...');
         
-        // Crear contenedor temporal
-        const tempContainer = document.createElement('div');
-        tempContainer.style.position = 'absolute';
-        tempContainer.style.left = '-99999px';
-        tempContainer.style.top = '0';
-        tempContainer.style.width = '794px';
-        tempContainer.style.backgroundColor = '#ffffff';
-        tempContainer.appendChild(clonedElement);
-        document.body.appendChild(tempContainer);
-
-        // Aplicar estilos inline para asegurar renderizado
-        const allElements = clonedElement.querySelectorAll('*');
-        allElements.forEach(el => {
-          const styles = window.getComputedStyle(el);
-          el.style.fontFamily = styles.fontFamily || 'Arial, sans-serif';
-          el.style.fontSize = styles.fontSize;
-          el.style.color = styles.color;
-          el.style.backgroundColor = styles.backgroundColor;
-          el.style.padding = styles.padding;
-          el.style.margin = styles.margin;
-          el.style.border = styles.border;
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        const canvas = await html2canvas(clonedElement, {
+        const canvas = await html2canvas(reportElement, {
           scale: 2,
           useCORS: true,
           allowTaint: true,
           logging: false,
           backgroundColor: '#ffffff',
           windowWidth: 794,
-          windowHeight: 1123
+          windowHeight: 1123,
+          ignoreElements: (element) => {
+            return element.tagName === 'IFRAME' || element.tagName === 'EMBED';
+          },
+          onclone: (clonedDoc) => {
+            const images = clonedDoc.getElementsByTagName('img');
+            Array.from(images).forEach(img => {
+              img.onerror = null;
+            });
+          }
         });
-
-        document.body.removeChild(tempContainer);
 
         const pdf = new jsPDF({
           orientation: 'portrait',
@@ -418,13 +409,19 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
           pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
         }
 
-        const fileName = `reporte_${selectedPatient?.nombre?.replace(/\s+/g, '_') || 'paciente'}_${formData.fecha}.pdf`;
+        // Guardar el PDF localmente
+        const fileName = `reporte_${selectedPatient?.nombre || 'paciente'}_${formData.fecha}.pdf`;
         pdf.save(fileName);
 
+        // Mensaje de éxito
+        alert('✅ Reporte guardado y PDF descargado');
         onBack();
         
       } else {
-        // PC: Usar método IFRAME
+        // ✅ PC: Usar método IFRAME original (que funcionaba)
+        console.log('🖥️ Imprimiendo en PC con iframe...');
+        
+        // Crear iframe oculto
         const iframe = document.createElement('iframe');
         iframe.style.position = 'absolute';
         iframe.style.width = '0';
@@ -432,6 +429,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         iframe.style.border = 'none';
         document.body.appendChild(iframe);
 
+        // Escribir el contenido en el iframe
         const iframeDoc = iframe.contentWindow.document;
         iframeDoc.open();
         iframeDoc.write(`
@@ -454,10 +452,12 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         `);
         iframeDoc.close();
 
+        // Esperar a que cargue y luego imprimir
         setTimeout(() => {
           iframe.contentWindow.focus();
           iframe.contentWindow.print();
           
+          // Limpiar
           setTimeout(() => {
             document.body.removeChild(iframe);
             onBack();
@@ -466,8 +466,8 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       }
       
     } catch (error) {
-      console.error('Error al procesar:', error);
-      setErrors(['Error al procesar el reporte. Por favor, intenta nuevamente.']);
+      console.error('Error al guardar:', error);
+      alert('❌ Error al guardar el reporte: ' + error.message);
     } finally {
       setIsSaving(false);
     }
@@ -550,7 +550,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             </div>
           </div>
 
-          {/* Vista previa */}
+          {/* Vista previa - con clase especial para capturar */}
           <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
             <div className="bg-white max-w-[210mm] mx-auto shadow-lg">
               <div className="report-to-print">
