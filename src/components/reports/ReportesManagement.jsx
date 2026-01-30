@@ -10,8 +10,6 @@ import BitacoraModal from './BitacoraModal';
 import { reportesAPI, pruebasAPI } from '../../services/api';
 
 
-// Reemplaza el componente TestSelectionModal en ReportesManagement.jsx
-
 const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
   return (
     <div 
@@ -42,7 +40,6 @@ const TestSelectionModal = ({ onClose, onSelectTest, pruebas, isLoading }) => {
             </div>
           ) : pruebas.length > 0 ? (
             pruebas.map((prueba) => {
-              // ✅ CAMBIO: Ahora verificamos que tenga subPruebas en lugar de hardcodear códigos
               const isAvailable = prueba.subPruebas && prueba.subPruebas.length > 0;
               
               return (
@@ -295,9 +292,14 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalReports, setTotalReports] = useState(0);
 
-  useEffect(() => {
+  // ✅ CORRECTO (reactivo con delay)
+useEffect(() => {
+  const delaySearch = setTimeout(() => {
     fetchReportes();
-  }, [currentPage]);
+  }, 500); // Espera 500ms después de que el usuario deje de escribir
+
+  return () => clearTimeout(delaySearch);
+}, [currentPage, searchTerm]); // Se ejecuta cuando cambia CUALQUIERA de los dos
 
   useEffect(() => {
     if (successMessage) {
@@ -306,18 +308,29 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     }
   }, [successMessage]);
 
+  // ✅ MEJORADO: fetchReportes ahora envía el término de búsqueda al backend
   const fetchReportes = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await reportesAPI.getAll({ 
+      const params = { 
         page: currentPage, 
         limit: 10
-      });
+      };
+
+      // ✅ Agregar búsqueda si existe
+      if (searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+
+      console.log('🔍 Buscando con parámetros:', params);
+      
+      const response = await reportesAPI.getAll(params);
       
       setReports(response.data || []);
       setTotalPages(response.pagination?.pages || 1);
       setTotalReports(response.pagination?.total || 0);
+      
     } catch (err) {
       console.error('Error al cargar reportes:', err);
       setError(err.message);
@@ -341,13 +354,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     }
   };
 
-  const filteredReports = reports.filter(report => {
-    const pacienteNombre = (report.datosPaciente?.nombre || report.paciente?.nombre || '').toLowerCase();
-    const folio = (report.folio || '').toLowerCase();
-    const search = searchTerm.toLowerCase();
-    return pacienteNombre.includes(search) || folio.includes(search);
-  });
-
   const handleSelectTest = useCallback((prueba) => {
     setShowTestSelection(false);
     setSelectedPrueba(prueba);
@@ -360,6 +366,11 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     setSelectedReport(null);
     fetchReportes();
   };
+
+  const handleSearchChange = (e) => {
+  setSearchTerm(e.target.value);
+  setCurrentPage(1); // Resetear a página 1 cuando busca
+};
 
   const reconstructFormDataFromReport = (report) => {
     console.log('🔍 Reconstruyendo formData desde:', report);
@@ -500,13 +511,11 @@ const handleDownload = async (report) => {
 
     console.log('📋 Paso 6: Preparando HTML para impresión...');
     
-    // Detectar si es móvil
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     
     if (isMobile) {
       console.log('📱 Móvil detectado - usando ventana nueva con botón de volver...');
       
-      // HTML simplificado para móvil con botón de volver
       const htmlContentMobile = `
 <!DOCTYPE html>
 <html>
@@ -599,7 +608,6 @@ const handleDownload = async (report) => {
         printWindow.document.write(htmlContentMobile);
         printWindow.document.close();
         
-        // Abrir diálogo de impresión automáticamente
         setTimeout(() => {
           printWindow.print();
         }, 500);
@@ -610,7 +618,6 @@ const handleDownload = async (report) => {
     else {
       console.log('💻 Desktop detectado - usando iframe...');
       
-      // Crear el HTML completo del reporte para desktop
       const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -631,7 +638,6 @@ const handleDownload = async (report) => {
 </html>
 `;
       
-      // En desktop: usar iframe oculto
       const iframe = document.createElement('iframe');
       iframe.style.position = 'absolute';
       iframe.style.width = '0';
@@ -654,7 +660,6 @@ const handleDownload = async (report) => {
       }, 250);
     }
     
-    // Limpiar elementos temporales
     root.unmount();
     document.body.removeChild(tempDiv);
     setSuccessMessage('');
@@ -738,13 +743,14 @@ const handleDownload = async (report) => {
             </div>
           </div>
 
+          {/* ✅ MEJORADO: Campo de búsqueda con debounce automático */}
           <div className="mb-6">
             <div className="relative">
               <input
                 type="text"
                 placeholder="Buscar por nombre de paciente o folio..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={handleSearchChange}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm font-inter"
               />
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -752,7 +758,21 @@ const handleDownload = async (report) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
+            {searchTerm && (
+              <p className="text-xs text-blue-600 mt-1 font-inter">
+                🔍 Buscando "{searchTerm}" en todos los registros...
+              </p>
+            )}
           </div>
 
           {successMessage && (
@@ -771,7 +791,8 @@ const handleDownload = async (report) => {
 
           <div className="mb-4">
             <p className="text-sm text-gray-600 font-inter">
-              Mostrando {filteredReports.length} de {totalReports} reportes
+              Mostrando {reports.length} de {totalReports} reportes
+              {searchTerm && ' (filtrados por búsqueda)'}
             </p>
           </div>
 
@@ -794,8 +815,8 @@ const handleDownload = async (report) => {
                       <p className="text-gray-500 text-sm font-inter">Cargando reportes...</p>
                     </td>
                   </tr>
-                ) : filteredReports.length > 0 ? (
-                  filteredReports.map((report) => (
+                ) : reports.length > 0 ? (
+                  reports.map((report) => (
                     <ReportRow
                       key={report._id}
                       report={report}
@@ -809,8 +830,16 @@ const handleDownload = async (report) => {
                   <tr>
                     <td colSpan="5" className="px-4 py-12 text-center">
                       <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500 text-sm font-inter">No hay reportes registrados</p>
-                      <p className="text-gray-400 text-xs mt-1 font-inter">Crea tu primer reporte clínico</p>
+                      <p className="text-gray-500 text-sm font-inter">
+                        {searchTerm 
+                          ? `No se encontraron reportes con "${searchTerm}"` 
+                          : 'No hay reportes registrados'}
+                      </p>
+                      <p className="text-gray-400 text-xs mt-1 font-inter">
+                        {searchTerm 
+                          ? 'Intenta con otro término de búsqueda' 
+                          : 'Crea tu primer reporte clínico'}
+                      </p>
                     </td>
                   </tr>
                 )}

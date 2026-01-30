@@ -6,19 +6,56 @@ import { reportesAPI, pruebasAPI } from '../../services/api';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Componente de Formulario Dinámico (mismo que ReportGenerator)
-const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }) => {
+// Componente de Formulario Dinámico (actualizado con campos de paciente)
+const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, onPatientChange, errors }) => {
   if (!testConfig) return null;
 
   return (
     <div className="space-y-4">
-      {/* Info del paciente */}
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <h3 className="text-xs font-semibold text-blue-900 mb-2">Paciente</h3>
-        <p className="text-sm font-medium text-gray-900">{selectedPatient?.nombre}</p>
-        <div className="flex gap-3 text-xs text-gray-600 mt-1">
-          <span>Exp: {selectedPatient?.numeroExpediente || selectedPatient?.expediente || 'N/A'}</span>
-          {selectedPatient?.edad && <span>Edad: {selectedPatient.edad} años</span>}
+      {/* ✅ NUEVO: Info del paciente EDITABLE */}
+      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+        <h3 className="text-xs font-semibold text-blue-900 mb-2">Datos del Paciente</h3>
+        
+        {/* Nombre editable */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Nombre completo *</label>
+          <input
+            type="text"
+            value={selectedPatient?.nombre || ''}
+            onChange={(e) => onPatientChange('nombre', e.target.value)}
+            className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+              errors.includes('Nombre del paciente') ? 'border-red-300 bg-red-50' : 'border-gray-300'
+            }`}
+            placeholder="Nombre completo del paciente"
+          />
+        </div>
+
+        {/* Edad editable */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Edad *</label>
+            <input
+              type="number"
+              min="0"
+              max="150"
+              value={selectedPatient?.edad || ''}
+              onChange={(e) => onPatientChange('edad', e.target.value)}
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                errors.includes('Edad del paciente') ? 'border-red-300 bg-red-50' : 'border-gray-300'
+              }`}
+              placeholder="Edad"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">No. Expediente</label>
+            <input
+              type="text"
+              value={selectedPatient?.numeroExpediente || ''}
+              disabled
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+              placeholder="N/A"
+            />
+          </div>
         </div>
       </div>
 
@@ -169,7 +206,7 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }
 
 // ✅ Componente Principal de Edición
 const ReportEditor = ({ onBack, reportToEdit }) => {
-  const [currentStep, setCurrentStep] = useState('form'); // Solo 'form' o 'preview'
+  const [currentStep, setCurrentStep] = useState('form');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState([]);
@@ -177,7 +214,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
   const [testConfig, setTestConfig] = useState(null);
   const [isLoadingTest, setIsLoadingTest] = useState(true);
 
-  // ✅ Función auxiliar para reconstruir formData desde el reporte
   const reconstructFormDataFromReport = (report) => {
     console.log('🔍 Reconstruyendo formData desde reporte:', report);
     
@@ -187,13 +223,11 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
       observaciones: report.observaciones || ''
     };
 
-    // Reconstruir valores de resultados
     report.resultados?.forEach((resultado) => {
       const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
       formData[subPruebaId] = resultado.valor;
     });
 
-    // Reconstruir campos adicionales
     report.camposAdicionales?.forEach((campo) => {
       const campoId = campo._id?.$oid || campo._id;
       formData[`campo_${campoId}`] = campo.valor;
@@ -203,17 +237,14 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     return formData;
   };
 
-  // ✅ Función auxiliar para reconstruir testConfig
   const reconstructTestConfigFromReport = async (report) => {
     console.log('🔍 Reconstruyendo testConfig desde reporte');
     
-    // ESTRATEGIA 1: Si el reporte ya tiene la prueba poblada
     if (report.prueba?.subPruebas && report.prueba.subPruebas.length > 0) {
       console.log('✅ Usando prueba poblada');
       return report.prueba;
     }
 
-    // ESTRATEGIA 2: Cargar desde API
     const pruebaId = report.prueba?.$oid || report.prueba?._id || report.prueba;
     
     if (pruebaId) {
@@ -231,7 +262,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
       }
     }
 
-    // ESTRATEGIA 3 (FALLBACK): Construir desde resultados
     console.log('⚠️ Usando fallback');
     return {
       _id: pruebaId || 'unknown',
@@ -253,7 +283,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     };
   };
 
-  // ✅ Cargar datos del reporte al montar
   useEffect(() => {
     const loadReportData = async () => {
       if (!reportToEdit) {
@@ -264,20 +293,17 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
       try {
         setIsLoadingTest(true);
         
-        // Reconstruir datos del paciente
         setSelectedPatient({
           _id: reportToEdit.paciente?._id || reportToEdit.paciente,
           nombre: reportToEdit.datosPaciente?.nombre || 'N/A',
           numeroExpediente: reportToEdit.datosPaciente?.numeroExpediente || 
                            reportToEdit.datosPaciente?.expediente || 'N/A',
-          edad: reportToEdit.datosPaciente?.edad || 'N/A'
+          edad: reportToEdit.datosPaciente?.edad || ''
         });
 
-        // Reconstruir configuración de la prueba
         const config = await reconstructTestConfigFromReport(reportToEdit);
         setTestConfig(config);
 
-        // Reconstruir formData
         const reconstructedFormData = reconstructFormDataFromReport(reportToEdit);
         setFormData(reconstructedFormData);
 
@@ -297,10 +323,18 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     if (errors.length > 0) setErrors([]);
   }, [errors.length]);
 
+  // ✅ NUEVO: Manejador para cambios en datos del paciente
+  const handlePatientChange = useCallback((field, value) => {
+    setSelectedPatient(prev => ({ ...prev, [field]: value }));
+    if (errors.length > 0) setErrors([]);
+  }, [errors.length]);
+
   const validateForm = () => {
     const validationErrors = [];
     if (!formData.fecha) validationErrors.push('Fecha');
     if (!formData.hora) validationErrors.push('Hora');
+    if (!selectedPatient?.nombre?.trim()) validationErrors.push('Nombre del paciente');
+    if (!selectedPatient?.edad) validationErrors.push('Edad del paciente');
     return validationErrors;
   };
 
@@ -314,11 +348,9 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ Función para guardar cambios (UPDATE)
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
-      // Preparar resultados actualizados
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -335,7 +367,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         }
       });
 
-      // Preparar campos adicionales
       let camposAdicionales = [];
       testConfig.camposAdicionales?.forEach((campo) => {
         const valor = formData[`campo_${campo._id}`];
@@ -348,19 +379,27 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         }
       });
 
+      const fechaRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
+
       const updateData = {
         resultados,
         camposAdicionales,
-        observaciones: formData.observaciones || ''
+        observaciones: formData.observaciones || '',
+        fechaRealizacion: fechaRealizacion.toISOString(),
+        // ✅ NUEVO: Incluir datos del paciente actualizados
+        datosPaciente: {
+          nombre: selectedPatient.nombre,
+          edad: parseInt(selectedPatient.edad),
+          numeroExpediente: selectedPatient.numeroExpediente
+        }
       };
 
       console.log('💾 Actualizando reporte:', reportToEdit._id, updateData);
 
-      // Llamar al API para actualizar
       await reportesAPI.update(reportToEdit._id, updateData);
       
       alert('✅ Reporte actualizado exitosamente');
-      onBack(); // Volver y refrescar lista
+      onBack();
       
     } catch (error) {
       console.error('Error al actualizar:', error);
@@ -370,11 +409,9 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     }
   };
 
-  // ✅ Función para guardar y generar PDF
   const handleSaveAndPrint = async () => {
     setIsSaving(true);
     try {
-      // 1. Guardar cambios primero
       let resultados = [];
       
       testConfig.subPruebas?.forEach((subPrueba) => {
@@ -391,14 +428,35 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         }
       });
 
+      let camposAdicionales = [];
+      testConfig.camposAdicionales?.forEach((campo) => {
+        const valor = formData[`campo_${campo._id}`];
+        if (valor) {
+          camposAdicionales.push({
+            _id: campo._id,
+            nombre: campo.nombre,
+            valor: valor
+          });
+        }
+      });
+
+      const fechaRealizacion = new Date(`${formData.fecha}T${formData.hora}:00`);
+
       const updateData = {
         resultados,
-        observaciones: formData.observaciones || ''
+        camposAdicionales,
+        observaciones: formData.observaciones || '',
+        fechaRealizacion: fechaRealizacion.toISOString(),
+        // ✅ NUEVO: Incluir datos del paciente actualizados
+        datosPaciente: {
+          nombre: selectedPatient.nombre,
+          edad: parseInt(selectedPatient.edad),
+          numeroExpediente: selectedPatient.numeroExpediente
+        }
       };
 
       await reportesAPI.update(reportToEdit._id, updateData);
       
-      // 2. Generar PDF
       const reportElement = document.querySelector('.report-to-print');
       if (!reportElement) {
         alert('Error: No se encontró el reporte');
@@ -409,7 +467,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        // Móvil: Generar PDF
         const canvas = await html2canvas(reportElement, {
           scale: 2,
           useCORS: true,
@@ -442,7 +499,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         onBack();
         
       } else {
-        // PC: Usar iframe
         const iframe = document.createElement('iframe');
         iframe.style.position = 'absolute';
         iframe.style.width = '0';
@@ -507,7 +563,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
           
-          {/* Header */}
           <div className="flex-shrink-0 bg-gray-50 border-b p-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
               <button 
@@ -559,7 +614,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
             </div>
           </div>
 
-          {/* Vista previa */}
           <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
             <div className="bg-white max-w-[210mm] mx-auto shadow-lg">
               <div className="report-to-print">
@@ -615,6 +669,7 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
             formData={formData}
             onChange={handleInputChange}
             selectedPatient={selectedPatient}
+            onPatientChange={handlePatientChange}
             errors={errors}
           />
         </div>

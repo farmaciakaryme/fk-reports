@@ -410,12 +410,7 @@ const PatientsManagement = ({ currentUser, onLogout, onNavigate }) => {
           )}
         </div>
 
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-900">
-            <strong>📝 Versión actual:</strong> Solo se manejan <strong>Nombre</strong> y <strong>Edad</strong>. 
-            Los campos adicionales estarán disponibles en próximas actualizaciones.
-          </p>
-        </div>
+        
       </div>
 
       <PatientModal isOpen={showModal} onClose={() => { setShowModal(false); setSelectedPatient(null); }} onSave={handleSavePatient} patient={selectedPatient} />
