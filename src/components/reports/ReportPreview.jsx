@@ -1,6 +1,7 @@
 /* eslint-disable react/no-unknown-property */
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react/prop-types */
+import firmaImg from '../../images/firma.png';
 
 // 🏥 Logo de Farmacias Karyme - Ruta al logo en public/images
 const LOGO_FARMACIA = '/images/logo-farmacia.png';
@@ -190,9 +191,17 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
           </div>
         </div>
 
-        {/* Espacio para firma */}
-        <div className="my-8 print:my-6">
-          <div className="h-16 print:h-12"></div>
+        {/* ✅ Firma digitalizada */}
+        <div className="my-6 print:my-4">
+          <div className="text-center">
+            <img 
+              src={firmaImg} 
+              alt="Firma Digital" 
+              className="mx-auto h-24 print:h-20 object-contain mb-2"
+              style={{ maxWidth: '300px' }}
+            />
+            <div className=""></div>
+          </div>
         </div>
 
         {/* Información del profesional */}
@@ -220,8 +229,8 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
           .print\\:hidden { display: none !important; }
           .print\\:p-2 { padding: 0.5rem !important; }
           .print\\:shadow-none { box-shadow: none !important; }
-          .print\\:my-6 { margin-top: 1.5rem !important; margin-bottom: 1.5rem !important; }
-          .print\\:h-12 { height: 3rem !important; }
+          .print\\:my-4 { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+          .print\\:h-14 { height: 3.5rem !important; }
         }
         * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
       `}</style>

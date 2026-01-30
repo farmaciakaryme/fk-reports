@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { ArrowLeft, Download, AlertCircle, Loader2 } from 'lucide-react';
 import PatientSearchModal from '../patients/PatientSearchsModal';
 import ReportPreview from './ReportPreview';
+
 import { reportesAPI, pruebasAPI } from '../../services/api';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -283,7 +284,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             nombre: subPrueba.nombre,
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
-            referencia: subPrueba.valoresReferencia?.texto || ''  // ✅ CORREGIDO
+            referencia: subPrueba.valoresReferencia?.texto || ''
           });
         }
       });
@@ -333,7 +334,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             nombre: subPrueba.nombre,
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
-            referencia: subPrueba.valoresReferencia?.texto || ''  // ✅ CORREGIDO
+            referencia: subPrueba.valoresReferencia?.texto || ''
           });
         }
       });
@@ -368,16 +369,26 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF
+        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF - CORREGIDO para evitar "load failed"
         console.log('📱 Generando PDF para móvil...');
         
         const canvas = await html2canvas(reportElement, {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           logging: false,
           backgroundColor: '#ffffff',
           windowWidth: 794,
-          windowHeight: 1123
+          windowHeight: 1123,
+          ignoreElements: (element) => {
+            return element.tagName === 'IFRAME' || element.tagName === 'EMBED';
+          },
+          onclone: (clonedDoc) => {
+            const images = clonedDoc.getElementsByTagName('img');
+            Array.from(images).forEach(img => {
+              img.onerror = null;
+            });
+          }
         });
 
         const pdf = new jsPDF({

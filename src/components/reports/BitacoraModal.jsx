@@ -1,50 +1,95 @@
+/* eslint-disable no-unused-vars */
+// BitacoraModal.jsx - CON FILTROS DE PRUEBAS
 /* eslint-disable react/prop-types */
 import { useState, useEffect } from 'react';
-import { X, Download, Loader2, Calendar, FileText } from 'lucide-react';
-import { reportesAPI } from '../../services/api';
+import { X, Download, Loader2, Calendar, FileText, Filter, CheckSquare, Square } from 'lucide-react';
+import { reportesAPI, pruebasAPI } from '../../services/api';
 
 const BitacoraModal = ({ onClose }) => {
   const [reportes, setReportes] = useState([]);
+  const [pruebas, setPruebas] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
+  const [pruebasSeleccionadas, setPruebasSeleccionadas] = useState([]);
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   useEffect(() => {
-    fetchAllReportes();
+    fetchData();
   }, []);
 
-  const fetchAllReportes = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await reportesAPI.getAll({ limit: 1000 });
-      setReportes(response.data || []);
+      // Cargar reportes
+      const reportesResponse = await reportesAPI.getAll({ limit: 1000 });
+      setReportes(reportesResponse.data || []);
+
+      // Cargar pruebas disponibles
+      const pruebasResponse = await pruebasAPI.getAll({ activo: 'true' });
+      const pruebasData = pruebasResponse.data || [];
+      setPruebas(pruebasData);
+      
+      // Seleccionar todas las pruebas por defecto
+      setPruebasSeleccionadas(pruebasData.map(p => p._id));
     } catch (err) {
-      console.error('Error al cargar bitácora:', err);
+      console.error('Error al cargar datos:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filtrarReportes = () => {
-    if (!fechaInicio && !fechaFin) return reportes;
-
-    return reportes.filter(report => {
-      const fechaReporte = new Date(report.fechaRealizacion);
-      const inicio = fechaInicio ? new Date(fechaInicio + 'T00:00:00') : null;
-      const fin = fechaFin ? new Date(fechaFin + 'T23:59:59') : null;
-
-      if (inicio && fin) {
-        return fechaReporte >= inicio && fechaReporte <= fin;
-      } else if (inicio) {
-        return fechaReporte >= inicio;
-      } else if (fin) {
-        return fechaReporte <= fin;
+  const togglePrueba = (pruebaId) => {
+    setPruebasSeleccionadas(prev => {
+      if (prev.includes(pruebaId)) {
+        return prev.filter(id => id !== pruebaId);
+      } else {
+        return [...prev, pruebaId];
       }
-      return true;
     });
+  };
+
+  const seleccionarTodas = () => {
+    setPruebasSeleccionadas(pruebas.map(p => p._id));
+  };
+
+  const deseleccionarTodas = () => {
+    setPruebasSeleccionadas([]);
+  };
+
+  const filtrarReportes = () => {
+    let reportesFiltrados = reportes;
+
+    // Filtro por fechas
+    if (fechaInicio || fechaFin) {
+      reportesFiltrados = reportesFiltrados.filter(report => {
+        const fechaReporte = new Date(report.fechaRealizacion);
+        const inicio = fechaInicio ? new Date(fechaInicio + 'T00:00:00') : null;
+        const fin = fechaFin ? new Date(fechaFin + 'T23:59:59') : null;
+
+        if (inicio && fin) {
+          return fechaReporte >= inicio && fechaReporte <= fin;
+        } else if (inicio) {
+          return fechaReporte >= inicio;
+        } else if (fin) {
+          return fechaReporte <= fin;
+        }
+        return true;
+      });
+    }
+
+    // Filtro por pruebas seleccionadas
+    if (pruebasSeleccionadas.length > 0) {
+      reportesFiltrados = reportesFiltrados.filter(report => {
+        const pruebaId = report.prueba?._id || report.prueba;
+        return pruebasSeleccionadas.includes(pruebaId);
+      });
+    }
+
+    return reportesFiltrados;
   };
 
   const agruparReportesInteligente = (reportes) => {
@@ -124,7 +169,6 @@ const BitacoraModal = ({ onClose }) => {
   const datosAgrupados = agruparReportesInteligente(reportesFiltrados);
   const pacientesUnicos = new Set(datosAgrupados.map(d => d.nombre)).size;
 
-  // ✅ Generar múltiples páginas automáticamente
   const FILAS_POR_PAGINA = 20;
   
   const generarPaginas = () => {
@@ -153,16 +197,12 @@ const BitacoraModal = ({ onClose }) => {
   const paginas = generarPaginas();
 
   const abrirPanelImpresion = () => {
-    console.log('🖨️ Abriendo diálogo de impresión de bitácora...');
-    
-    // Obtener el contenido a imprimir
     const printContent = document.getElementById('bitacora-print-area');
     if (!printContent) {
       alert('Error: No se encontró el contenido de la bitácora');
       return;
     }
 
-    // Crear iframe oculto
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
     iframe.style.width = '0';
@@ -170,7 +210,6 @@ const BitacoraModal = ({ onClose }) => {
     iframe.style.border = 'none';
     document.body.appendChild(iframe);
 
-    // Escribir el contenido en el iframe
     const iframeDoc = iframe.contentWindow.document;
     iframeDoc.open();
     iframeDoc.write(`
@@ -192,41 +231,46 @@ const BitacoraModal = ({ onClose }) => {
               font-family: Arial, sans-serif;
             }
             
-            /* Cada página debe tener altura controlada */
             .bitacora-page {
-              min-height: 9.5in;
-              max-height: 9.5in;
+              height: 10in;
               display: flex;
               flex-direction: column;
-              position: relative;
-            }
-            
-            .page-break {
               page-break-after: always;
               break-after: page;
             }
             
-            .page-break:last-child {
+            .bitacora-page:last-child {
               page-break-after: auto;
               break-after: auto;
             }
             
-            /* Contenedor del contenido */
-            .bitacora-content {
-              flex: 1;
-              display: flex;
-              flex-direction: column;
+            .tabla-contenedor {
+              flex: 0 0 auto;
             }
             
-            /* Las firmas siempre al final de la página */
             .firmas-section {
-              margin-top: auto;
-              padding-top: 2rem;
+              flex: 0 0 auto;
+              margin-top: 3rem;
+              padding-top: 1.5rem;
             }
             
-            /* Asegurar altura fija de filas */
             tbody tr {
-              height: 24px;
+              height: 22px !important;
+              max-height: 22px !important;
+            }
+            
+            tbody td {
+              padding: 2px 6px !important;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              font-size: 10px !important;
+              line-height: 1.3 !important;
+            }
+            
+            thead th {
+              font-size: 11px !important;
+              padding: 4px 6px !important;
             }
             
             * {
@@ -242,54 +286,38 @@ const BitacoraModal = ({ onClose }) => {
     `);
     iframeDoc.close();
 
-    // Esperar a que cargue y luego abrir diálogo de impresión
     setTimeout(() => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
-      
-      // Limpiar iframe después de un tiempo
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 1000);
+      setTimeout(() => document.body.removeChild(iframe), 1000);
     }, 250);
   };
 
   return (
     <>
-      <style>{`
-.page-break {
-  page-break-after: always;
-  break-after: page;
-}
-
-.page-break:last-child {
-  page-break-after: auto;
-  break-after: auto;
-}
-`}</style>
-
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col">
           
-          <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-blue-600 text-white rounded-t-xl no-print">
+          {/* Header */}
+          <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-blue-600 text-white rounded-t-xl">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
               <h2 className="text-sm sm:text-lg font-semibold">Bitácora de Atención de Certificación Médica</h2>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-blue-700 rounded-full transition-colors"
-            >
+            <button onClick={onClose} className="p-1 hover:bg-blue-700 rounded-full transition-colors">
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
 
-          <div className="p-3 sm:p-4 border-b bg-gray-50 no-print">
+          {/* Filtros */}
+          <div className="p-3 sm:p-4 border-b bg-gray-50">
             <p className="text-xs sm:text-sm text-gray-600 mb-3">
-              Filtra y descarga reportes clínicos por rango de fechas
+              Filtra y descarga reportes clínicos por rango de fechas y tipo de prueba
             </p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
-              <div className="flex-1 min-w-0">
+            
+            {/* Filtros de fecha */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3 mb-3">
+              <div className="flex-1">
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   <Calendar className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                   Fecha inicial
@@ -301,7 +329,7 @@ const BitacoraModal = ({ onClose }) => {
                   className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm"
                 />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1">
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   <Calendar className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                   Fecha final
@@ -314,6 +342,13 @@ const BitacoraModal = ({ onClose }) => {
                 />
               </div>
               <button
+                onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
+              >
+                <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
+                Filtrar Pruebas
+              </button>
+              <button
                 onClick={abrirPanelImpresion}
                 disabled={datosAgrupados.length === 0}
                 className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
@@ -322,68 +357,144 @@ const BitacoraModal = ({ onClose }) => {
                 Descargar PDF
               </button>
             </div>
+
+            {/* Panel de filtro de pruebas */}
+            {mostrarFiltros && (
+              <div className="bg-white border border-gray-300 rounded-lg p-4 mt-3">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Seleccionar Pruebas</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={seleccionarTodas}
+                      className="text-xs px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                    >
+                      Todas
+                    </button>
+                    <button
+                      onClick={deseleccionarTodas}
+                      className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    >
+                      Ninguna
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {pruebas.map((prueba) => {
+                    const isSelected = pruebasSeleccionadas.includes(prueba._id);
+                    return (
+                      <button
+                        key={prueba._id}
+                        onClick={() => togglePrueba(prueba._id)}
+                        className={`flex items-center gap-2 p-3 border-2 rounded-lg text-left transition-all ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {prueba.nombre}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {prueba.codigo}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 text-xs text-gray-600">
+                  {pruebasSeleccionadas.length} de {pruebas.length} pruebas seleccionadas
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Contenido */}
           <div className="flex-1 overflow-auto">
-            <div className="text-center mb-4 sm:mb-6 p-4 no-print">
+            <div className="text-center mb-4 p-4">
               <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-2">
                 BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
               </h3>
               <p className="text-xs sm:text-sm text-gray-600">
-                Mostrando {pacientesUnicos} pacientes únicos ({datosAgrupados.length} registros) - {paginas.length + 1} página{paginas.length + 1 !== 1 ? 's' : ''}
+                Mostrando {pacientesUnicos} pacientes únicos ({datosAgrupados.length} registros) - {paginas.length} página{paginas.length !== 1 ? 's' : ''}
               </p>
+              {pruebasSeleccionadas.length < pruebas.length && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Filtrado por {pruebasSeleccionadas.length} prueba{pruebasSeleccionadas.length !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
             
             {isLoading ? (
-              <div className="flex items-center justify-center h-full no-print">
+              <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-blue-600" />
               </div>
             ) : error ? (
-              <div className="p-4 text-red-600 text-xs sm:text-sm no-print">Error: {error}</div>
+              <div className="p-4 text-red-600 text-xs sm:text-sm">Error: {error}</div>
+            ) : datosAgrupados.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                <FileText className="w-16 h-16 mb-4 text-gray-300" />
+                <p className="text-sm">No hay reportes con los filtros seleccionados</p>
+              </div>
             ) : (
               <div id="bitacora-print-area">
-                {/* ✅ Renderizar TODAS las páginas con tablas */}
                 {paginas.map((filasPagina, indexPagina) => (
-                  <div key={indexPagina} className="bitacora-page page-break">
-                    <div className="p-3 sm:p-6">
-                      <div className="flex items-start justify-between mb-3 sm:mb-4">
-                        <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-gray-300 rounded-lg"></div>
-                        <div className="text-right text-xs sm:text-sm text-gray-500 italic">
+                  <div key={indexPagina} className="bitacora-page">
+                    <div className="p-6">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-16 h-16 border-2 border-gray-300 rounded-lg"></div>
+                        <div className="text-right text-sm text-gray-500 italic">
                           SALUD AL ALCANCE DE TODOS®
                         </div>
                       </div>
 
-                      <h1 className="text-center text-xs sm:text-sm font-bold text-blue-700 mb-3 sm:mb-4">
+                      <h1 className="text-center text-sm font-bold text-blue-700 mb-3">
                         BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
                       </h1>
 
-                      <div className="overflow-x-auto">
+                      <div className="tabla-contenedor">
                         <table className="w-full border-collapse border border-gray-800">
                           <thead>
                             <tr>
-                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">FECHA</th>
-                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">HORA</th>
-                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">NOMBRE</th>
-                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">EDAD</th>
-                              <th className="border border-gray-800 px-1 py-1.5 text-[11px] sm:text-xs font-bold text-center bg-white">MOTIVO</th>
+                              <th className="border border-gray-800 px-2 py-2 text-[11px] font-bold text-center bg-white" style={{ width: '10%' }}>
+                                FECHA
+                              </th>
+                              <th className="border border-gray-800 px-2 py-2 text-[11px] font-bold text-center bg-white" style={{ width: '8%' }}>
+                                HORA
+                              </th>
+                              <th className="border border-gray-800 px-2 py-2 text-[11px] font-bold text-center bg-white" style={{ width: '35%' }}>
+                                NOMBRE
+                              </th>
+                              <th className="border border-gray-800 px-2 py-2 text-[11px] font-bold text-center bg-white" style={{ width: '8%' }}>
+                                EDAD
+                              </th>
+                              <th className="border border-gray-800 px-2 py-2 text-[11px] font-bold text-center bg-white" style={{ width: '39%' }}>
+                                MOTIVO
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {filasPagina.map((item, index) => (
-                              <tr key={index}>
-                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
+                              <tr key={index} style={{ height: '22px' }}>
+                                <td className="border border-gray-800 text-center" style={{ fontSize: '10px', padding: '2px 6px' }}>
                                   {item.fecha}
                                 </td>
-                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
+                                <td className="border border-gray-800 text-center" style={{ fontSize: '10px', padding: '2px 6px' }}>
                                   {item.hora}
                                 </td>
-                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px]" style={{ height: '24px' }}>
+                                <td className="border border-gray-800" style={{ fontSize: '10px', padding: '2px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {item.nombre}
                                 </td>
-                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px] text-center" style={{ height: '24px' }}>
+                                <td className="border border-gray-800 text-center" style={{ fontSize: '10px', padding: '2px 6px' }}>
                                   {item.edad}
                                 </td>
-                                <td className="border border-gray-800 px-1 py-1.5 text-[10px] sm:text-[11px]" style={{ height: '24px' }}>
+                                <td className="border border-gray-800" style={{ fontSize: '10px', padding: '2px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {item.motivos.join(', ')}
                                 </td>
                               </tr>
@@ -392,55 +503,32 @@ const BitacoraModal = ({ onClose }) => {
                         </table>
                       </div>
 
-                      {/* Número de página */}
-                      <div className="text-center mt-4 text-xs text-gray-500">
-                        Página {indexPagina + 1} de {paginas.length}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* ✅ Página FINAL solo con firmas */}
-                <div className="bitacora-page">
-                  <div className="p-3 sm:p-6 h-full flex flex-col justify-center">
-                    <div className="flex items-start justify-between mb-8">
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-gray-300 rounded-lg"></div>
-                      <div className="text-right text-xs sm:text-sm text-gray-500 italic">
-                        SALUD AL ALCANCE DE TODOS®
-                      </div>
-                    </div>
-
-                    <h1 className="text-center text-xs sm:text-sm font-bold text-blue-700 mb-12">
-                      BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
-                    </h1>
-
-                    <div className="flex-1 flex items-center justify-center">
-                      <div className="w-full max-w-4xl">
+                      <div className="firmas-section">
                         <div className="flex justify-around items-end">
                           <div className="text-center">
-                            <div className="border-t-2 border-gray-800 w-48 mb-2"></div>
+                            <div className="border-t-2 border-gray-800 w-56 mb-2"></div>
                             <p className="text-xs font-bold">Dr. Seguridad Pública</p>
                             <p className="text-[10px] text-gray-600 mt-1">Firma y Sello</p>
                           </div>
                           <div className="text-center">
-                            <div className="border-t-2 border-gray-800 w-48 mb-2"></div>
+                            <div className="border-t-2 border-gray-800 w-56 mb-2"></div>
                             <p className="text-xs font-bold">Responsable Médico</p>
                             <p className="text-[10px] text-gray-600 mt-1">Firma y Sello</p>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="text-center mt-8 text-xs text-gray-500">
-                      Página {paginas.length + 1} de {paginas.length + 1}
+                      <div className="text-center mt-6 text-[10px] text-gray-500">
+                        Página {indexPagina + 1} de {paginas.length}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
 
-          <div className="p-3 sm:p-4 border-t bg-gray-50 text-center no-print">
+          <div className="p-3 sm:p-4 border-t bg-gray-50 text-center">
             <button
               onClick={onClose}
               className="px-4 sm:px-6 py-1.5 sm:py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs sm:text-sm font-medium"
