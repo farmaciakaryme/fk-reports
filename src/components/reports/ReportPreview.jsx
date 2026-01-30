@@ -216,9 +216,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
       />
       */}
       <div className="w-64 h-20 border-b-2 border-gray-800 mb-1"></div>
-      
-      <p className="text-xs font-bold text-gray-800">Q.F.B ELIUTH GARCIA CRUZ</p>
-      <p className="text-xs text-gray-600">Firma y Sello</p>
+            <p className="text-xs text-gray-600">Firma y Sello</p>
     </div>
   </div>
 </div>
