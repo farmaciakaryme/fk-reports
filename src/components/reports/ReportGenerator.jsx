@@ -127,11 +127,13 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }
                 <option key={opcion} value={opcion}>{opcion}</option>
               ))}
             </select>
-          ) : campo.tipo === 'numero' ? (
+          ) : campo.tipo === 'numero' || campo.tipo === 'number' ? (
             <input
               type="number"
+              step="0.01"
               value={formData[`campo_${campo._id}`] || ''}
               onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              placeholder={campo.placeholder || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           ) : campo.tipo === 'fecha' ? (
@@ -146,8 +148,12 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, errors }
               type="text"
               value={formData[`campo_${campo._id}`] || ''}
               onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              placeholder={campo.placeholder || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
+          )}
+          {campo.descripcion && (
+            <p className="text-xs text-gray-500 mt-1">{campo.descripcion}</p>
           )}
         </div>
       ))}
@@ -268,16 +274,17 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
     setCurrentStep('preview');
   };
 
-  // ✅ NUEVA FUNCIÓN: Solo guardar en BD sin imprimir
+  // ✅ FUNCIÓN CORREGIDA: Solo guardar en BD sin imprimir
   const handleSaveOnly = async () => {
     setIsSaving(true);
     try {
       // Guardar en base de datos
       let resultados = [];
       
+      // ✅ Guardar subpruebas
       testConfig.subPruebas?.forEach((subPrueba) => {
         const valor = formData[subPrueba._id];
-        if (valor) {
+        if (valor !== null && valor !== undefined) {
           resultados.push({
             subPruebaId: subPrueba._id,
             clave: subPrueba.clave || subPrueba.nombre.toUpperCase(),
@@ -285,6 +292,22 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
             referencia: subPrueba.valoresReferencia?.texto || ''
+          });
+        }
+      });
+
+      // ✅ NUEVO: Guardar camposAdicionales como resultados adicionales
+      testConfig.camposAdicionales?.forEach((campo) => {
+        const valor = formData[`campo_${campo._id}`];
+        // Guardar solo si tiene valor (no vacío)
+        if (valor !== null && valor !== undefined && valor !== '') {
+          resultados.push({
+            subPruebaId: campo._id,
+            clave: campo.clave || campo.nombre.toUpperCase().replace(/\s+/g, ''),
+            nombre: campo.nombre,
+            valor: valor.toString(),
+            unidad: campo.unidad || '',
+            referencia: campo.descripcion || ''
           });
         }
       });
@@ -325,9 +348,10 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       // 1. Guardar en base de datos
       let resultados = [];
       
+      // ✅ Guardar subpruebas
       testConfig.subPruebas?.forEach((subPrueba) => {
         const valor = formData[subPrueba._id];
-        if (valor) {
+        if (valor !== null && valor !== undefined) {
           resultados.push({
             subPruebaId: subPrueba._id,
             clave: subPrueba.clave || subPrueba.nombre.toUpperCase(),
@@ -335,6 +359,22 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
             valor: valor.toString(),
             unidad: subPrueba.unidad || '',
             referencia: subPrueba.valoresReferencia?.texto || ''
+          });
+        }
+      });
+
+      // ✅ NUEVO: Guardar camposAdicionales como resultados adicionales
+      testConfig.camposAdicionales?.forEach((campo) => {
+        const valor = formData[`campo_${campo._id}`];
+        // Guardar solo si tiene valor (no vacío)
+        if (valor !== null && valor !== undefined && valor !== '') {
+          resultados.push({
+            subPruebaId: campo._id,
+            clave: campo.clave || campo.nombre.toUpperCase().replace(/\s+/g, ''),
+            nombre: campo.nombre,
+            valor: valor.toString(),
+            unidad: campo.unidad || '',
+            referencia: campo.descripcion || ''
           });
         }
       });
@@ -369,7 +409,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isMobile) {
-        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF - CORREGIDO para evitar "load failed"
+        // ✅ MÓVIL: Generar PDF con html2canvas + jsPDF
         console.log('📱 Generando PDF para móvil...');
         
         const canvas = await html2canvas(reportElement, {
@@ -418,7 +458,7 @@ const ReportGenerator = ({ onBack, pruebaData }) => {
         onBack();
         
       } else {
-        // ✅ PC: Usar método IFRAME original (que funcionaba)
+        // ✅ PC: Usar método IFRAME original
         console.log('🖥️ Imprimiendo en PC con iframe...');
         
         // Crear iframe oculto

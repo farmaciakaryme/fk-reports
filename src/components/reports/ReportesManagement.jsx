@@ -292,14 +292,13 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalReports, setTotalReports] = useState(0);
 
-  // ✅ CORRECTO (reactivo con delay)
-useEffect(() => {
-  const delaySearch = setTimeout(() => {
-    fetchReportes();
-  }, 500); // Espera 500ms después de que el usuario deje de escribir
+  useEffect(() => {
+    const delaySearch = setTimeout(() => {
+      fetchReportes();
+    }, 500);
 
-  return () => clearTimeout(delaySearch);
-}, [currentPage, searchTerm]); // Se ejecuta cuando cambia CUALQUIERA de los dos
+    return () => clearTimeout(delaySearch);
+  }, [currentPage, searchTerm]);
 
   useEffect(() => {
     if (successMessage) {
@@ -308,7 +307,6 @@ useEffect(() => {
     }
   }, [successMessage]);
 
-  // ✅ MEJORADO: fetchReportes ahora envía el término de búsqueda al backend
   const fetchReportes = async () => {
     setIsLoading(true);
     setError(null);
@@ -318,7 +316,6 @@ useEffect(() => {
         limit: 10
       };
 
-      // ✅ Agregar búsqueda si existe
       if (searchTerm.trim()) {
         params.search = searchTerm.trim();
       }
@@ -368,10 +365,11 @@ useEffect(() => {
   };
 
   const handleSearchChange = (e) => {
-  setSearchTerm(e.target.value);
-  setCurrentPage(1); // Resetear a página 1 cuando busca
-};
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
 
+  // ✅ FUNCIÓN CORREGIDA: Reconstruir formData con campos adicionales
   const reconstructFormDataFromReport = (report) => {
     console.log('🔍 Reconstruyendo formData desde:', report);
     
@@ -384,8 +382,18 @@ useEffect(() => {
     console.log('📊 Resultados a procesar:', report.resultados);
     report.resultados?.forEach((resultado) => {
       const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
-      console.log(`  - ${resultado.nombre}: ${resultado.valor} (ID: ${subPruebaId})`);
-      formData[subPruebaId] = resultado.valor;
+      console.log(`  - ${resultado.nombre}: ${resultado.valor} (ID: ${subPruebaId}, clave: ${resultado.clave})`);
+      
+      // ✅ NUEVO: Detectar si es campo adicional por su clave o unidad
+      if (resultado.clave === 'gradosAlcohol' || resultado.unidad === 'mg/L') {
+        // Es campo adicional - usar prefijo campo_
+        formData[`campo_${subPruebaId}`] = resultado.valor;
+        console.log(`    ↳ Guardado como campo adicional: campo_${subPruebaId} = ${resultado.valor}`);
+      } else {
+        // Es subprueba normal
+        formData[subPruebaId] = resultado.valor;
+        console.log(`    ↳ Guardado como subprueba: ${subPruebaId} = ${resultado.valor}`);
+      }
     });
 
     report.camposAdicionales?.forEach((campo) => {
@@ -397,6 +405,7 @@ useEffect(() => {
     return formData;
   };
 
+  // ✅ FUNCIÓN CORREGIDA: Reconstruir testConfig con campos adicionales
   const reconstructTestConfigFromReport = async (report) => {
     console.log('🔍 Reconstruyendo testConfig desde:', report);
     console.log('📊 Resultados guardados:', report.resultados);
@@ -419,7 +428,8 @@ useEffect(() => {
         
         if (pruebaCompleta.subPruebas && pruebaCompleta.subPruebas.length > 0) {
           console.log('✅ Usando prueba desde API con', pruebaCompleta.subPruebas.length, 'subPruebas');
-          return pruebaCompleta;
+          console.log('✅ Campos adicionales:', pruebaCompleta.camposAdicionales?.length || 0);
+          return pruebaCompleta; // ✅ Retorna con camposAdicionales incluidos
         } else {
           console.warn('⚠️ Prueba cargada pero sin subPruebas');
         }
@@ -431,92 +441,120 @@ useEffect(() => {
     console.log('⚠️ Usando fallback - construyendo desde resultados guardados');
     console.log('📊 Resultados disponibles:', report.resultados);
     
+    // ✅ NUEVO: Separar subPruebas de camposAdicionales
+    const subPruebasResults = [];
+    const camposAdicionalesResults = [];
+    
+    report.resultados?.forEach(resultado => {
+      const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
+      
+      // Detectar si es campo adicional por su clave o unidad
+      if (resultado.clave === 'gradosAlcohol' || resultado.unidad === 'mg/L') {
+        console.log(`  ✅ Campo adicional detectado: ${resultado.nombre}`);
+        camposAdicionalesResults.push({
+          _id: subPruebaId,
+          nombre: resultado.nombre,
+          clave: resultado.clave,
+          unidad: resultado.unidad || '',
+          tipo: 'number',
+          descripcion: resultado.referencia || ''
+        });
+      } else {
+        console.log(`  ✅ SubPrueba detectada: ${resultado.nombre}`);
+        subPruebasResults.push({
+          _id: subPruebaId,
+          nombre: resultado.nombre || resultado.clave || 'Sin nombre',
+          clave: resultado.clave,
+          unidad: resultado.unidad || '',
+          tipo: 'texto',
+          valoresReferencia: {
+            texto: resultado.referencia || 'Sin referencia disponible',
+            opciones: []
+          }
+        });
+      }
+    });
+
+    console.log('✅ SubPruebas reconstruidas:', subPruebasResults.length);
+    console.log('✅ Campos adicionales reconstruidos:', camposAdicionalesResults.length);
+
     return {
       _id: pruebaId || 'unknown',
       nombre: report.datosPrueba?.nombre || 'Reporte Médico',
       codigo: report.datosPrueba?.codigo || '',
       metodo: report.datosPrueba?.metodo || 'N/A',
       tecnica: report.datosPrueba?.tecnica || 'N/A',
-      subPruebas: report.resultados?.map(resultado => ({
-        _id: resultado.subPruebaId?.$oid || resultado.subPruebaId,
-        nombre: resultado.nombre || resultado.clave || 'Sin nombre',
-        clave: resultado.clave,
-        unidad: resultado.unidad || '',
-        tipo: 'texto',
-        valoresReferencia: {
-          texto: resultado.referencia || 'Sin referencia disponible',
-          opciones: []
-        }
-      })) || []
+      subPruebas: subPruebasResults,
+      camposAdicionales: camposAdicionalesResults // ✅ NUEVO: Incluir campos adicionales
     };
   };
 
-const handleDownload = async (report) => {
-  try {
-    setSuccessMessage('Preparando reporte para impresión...');
-    
-    console.log('🎯 Iniciando impresión de reporte:', report.folio);
-    
-    console.log('📋 Paso 1: Reconstruyendo testConfig...');
-    const testConfig = await reconstructTestConfigFromReport(report);
-    console.log('✅ TestConfig reconstruido:', testConfig);
-    
-    console.log('📋 Paso 2: Reconstruyendo formData...');
-    const formData = reconstructFormDataFromReport(report);
-    console.log('✅ FormData reconstruido:', formData);
-    
-    const selectedPatient = {
-      nombre: report.datosPaciente?.nombre || 'N/A',
-      numeroExpediente: report.datosPaciente?.numeroExpediente || report.datosPaciente?.expediente || 'N/A',
-      edad: report.datosPaciente?.edad || 'N/A'
-    };
-    console.log('✅ Datos del paciente:', selectedPatient);
-
-    console.log('📋 Paso 3: Creando elemento temporal...');
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'absolute';
-    tempDiv.style.left = '-9999px';
-    tempDiv.style.top = '0';
-    tempDiv.style.width = '794px';
-    document.body.appendChild(tempDiv);
-
-    console.log('📋 Paso 4: Importando módulos...');
-    const React = (await import('react')).default;
-    const ReactDOM = (await import('react-dom/client')).default;
-    const ReportPreview = (await import('./ReportPreview')).default;
-
-    console.log('📋 Paso 5: Renderizando ReportPreview...');
-    const root = ReactDOM.createRoot(tempDiv);
-    
-    await new Promise((resolve) => {
-      root.render(
-        React.createElement(ReportPreview, {
-          testConfig,
-          formData,
-          selectedPatient
-        })
-      );
-      setTimeout(resolve, 1000);
-    });
-
-    console.log('✅ Contenido renderizado');
-
-    const reportElement = tempDiv.firstChild;
-    if (!reportElement) {
-      alert('Error: No se encontró el reporte');
-      root.unmount();
-      document.body.removeChild(tempDiv);
-      return;
-    }
-
-    console.log('📋 Paso 6: Preparando HTML para impresión...');
-    
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
-    if (isMobile) {
-      console.log('📱 Móvil detectado - usando ventana nueva con botón de volver...');
+  const handleDownload = async (report) => {
+    try {
+      setSuccessMessage('Preparando reporte para impresión...');
       
-      const htmlContentMobile = `
+      console.log('🎯 Iniciando impresión de reporte:', report.folio);
+      
+      console.log('📋 Paso 1: Reconstruyendo testConfig...');
+      const testConfig = await reconstructTestConfigFromReport(report);
+      console.log('✅ TestConfig reconstruido:', testConfig);
+      
+      console.log('📋 Paso 2: Reconstruyendo formData...');
+      const formData = reconstructFormDataFromReport(report);
+      console.log('✅ FormData reconstruido:', formData);
+      
+      const selectedPatient = {
+        nombre: report.datosPaciente?.nombre || 'N/A',
+        numeroExpediente: report.datosPaciente?.numeroExpediente || report.datosPaciente?.expediente || 'N/A',
+        edad: report.datosPaciente?.edad || 'N/A'
+      };
+      console.log('✅ Datos del paciente:', selectedPatient);
+
+      console.log('📋 Paso 3: Creando elemento temporal...');
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.top = '0';
+      tempDiv.style.width = '794px';
+      document.body.appendChild(tempDiv);
+
+      console.log('📋 Paso 4: Importando módulos...');
+      const React = (await import('react')).default;
+      const ReactDOM = (await import('react-dom/client')).default;
+      const ReportPreview = (await import('./ReportPreview')).default;
+
+      console.log('📋 Paso 5: Renderizando ReportPreview...');
+      const root = ReactDOM.createRoot(tempDiv);
+      
+      await new Promise((resolve) => {
+        root.render(
+          React.createElement(ReportPreview, {
+            testConfig,
+            formData,
+            selectedPatient
+          })
+        );
+        setTimeout(resolve, 1000);
+      });
+
+      console.log('✅ Contenido renderizado');
+
+      const reportElement = tempDiv.firstChild;
+      if (!reportElement) {
+        alert('Error: No se encontró el reporte');
+        root.unmount();
+        document.body.removeChild(tempDiv);
+        return;
+      }
+
+      console.log('📋 Paso 6: Preparando HTML para impresión...');
+      
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        console.log('📱 Móvil detectado - usando ventana nueva con botón de volver...');
+        
+        const htmlContentMobile = `
 <!DOCTYPE html>
 <html>
   <head>
@@ -603,22 +641,22 @@ const handleDownload = async (report) => {
 </html>
 `;
 
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(htmlContentMobile);
-        printWindow.document.close();
-        
-        setTimeout(() => {
-          printWindow.print();
-        }, 500);
-      } else {
-        alert('Por favor permite las ventanas emergentes para imprimir el reporte');
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(htmlContentMobile);
+          printWindow.document.close();
+          
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        } else {
+          alert('Por favor permite las ventanas emergentes para imprimir el reporte');
+        }
       }
-    }
-    else {
-      console.log('💻 Desktop detectado - usando iframe...');
-      
-      const htmlContent = `
+      else {
+        console.log('💻 Desktop detectado - usando iframe...');
+        
+        const htmlContent = `
 <!DOCTYPE html>
 <html>
   <head>
@@ -637,38 +675,38 @@ const handleDownload = async (report) => {
   </body>
 </html>
 `;
-      
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'absolute';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = 'none';
-      document.body.appendChild(iframe);
-
-      const iframeDoc = iframe.contentWindow.document;
-      iframeDoc.open();
-      iframeDoc.write(htmlContent);
-      iframeDoc.close();
-
-      setTimeout(() => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
         
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(htmlContent);
+        iframeDoc.close();
+
         setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 1000);
-      }, 250);
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 1000);
+        }, 250);
+      }
+      
+      root.unmount();
+      document.body.removeChild(tempDiv);
+      setSuccessMessage('');
+      
+    } catch (err) {
+      console.error('Error al preparar reporte:', err);
+      setError('Error al preparar el reporte: ' + err.message);
     }
-    
-    root.unmount();
-    document.body.removeChild(tempDiv);
-    setSuccessMessage('');
-    
-  } catch (err) {
-    console.error('Error al preparar reporte:', err);
-    setError('Error al preparar el reporte: ' + err.message);
-  }
-};
+  };
 
   const handleView = async (report) => {
     handleDownload(report);
@@ -743,7 +781,6 @@ const handleDownload = async (report) => {
             </div>
           </div>
 
-          {/* ✅ MEJORADO: Campo de búsqueda con debounce automático */}
           <div className="mb-6">
             <div className="relative">
               <input

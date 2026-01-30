@@ -78,22 +78,19 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
     <div className="bg-white p-4 print:p-2">
       <div className="max-w-4xl mx-auto bg-white border border-gray-300 shadow-lg p-4 print:p-2 print:shadow-none" style={{ fontFamily: 'Arial, sans-serif' }}>
         
-        {/* Header con logo y título - MODIFICADO ✅ */}
+        {/* Header con logo y título */}
         <div className="border-b-2 border-blue-600 pb-2 mb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              {/* ✅ CAMBIO: Logo de Farmacias Karyme en lugar del círculo azul */}
               <img 
                 src={LOGO_FARMACIA} 
                 alt="Farmacias Karyme"
                 className="w-20 h-20 object-contain mr-3"
                 onError={(e) => {
-                  // Fallback si no carga la imagen
                   e.target.style.display = 'none';
                   e.target.nextElementSibling.style.display = 'flex';
                 }}
               />
-              {/* Fallback: círculo azul si falla la imagen */}
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full items-center justify-center mr-2" style={{ display: 'none' }}>
                 <div className="text-white font-bold text-xs">SALUD</div>
               </div>
@@ -162,6 +159,40 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
           </div>
         </div>
 
+        {/* ✅ NUEVO: Mostrar campos adicionales debajo de la tabla */}
+        {testConfig?.camposAdicionales && testConfig.camposAdicionales.length > 0 && (() => {
+          // Filtrar solo campos que tienen valor
+          const camposConValor = testConfig.camposAdicionales.filter(campo => {
+            const valor = formData[`campo_${campo._id}`];
+            return valor !== null && valor !== undefined && valor !== '';
+          });
+
+          if (camposConValor.length === 0) return null;
+
+          return (
+            <div className="mb-2 px-2 py-2 bg-gray-50 rounded border border-gray-200">
+              {camposConValor.map((campo, index) => {
+                const valor = formData[`campo_${campo._id}`];
+                return (
+                  <div key={campo._id} className={index > 0 ? 'mt-1.5 pt-1.5 border-t border-gray-200' : ''}>
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="font-medium text-gray-700">{campo.nombre}:</span>
+                      <span className="font-semibold text-gray-900">
+                        {valor} {campo.unidad && <span className="font-normal text-gray-600">{campo.unidad}</span>}
+                      </span>
+                    </div>
+                    {campo.descripcion && (
+                      <p className="text-xs text-gray-500 mt-0.5" style={{ fontSize: '10px' }}>
+                        {campo.descripcion}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         {/* Observaciones */}
         {formData.observaciones && (
           <div className="bg-yellow-50 border border-yellow-400 rounded-lg p-2 mb-2">
@@ -190,36 +221,15 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
             <p className="text-xs font-bold">FIN DEL INFORME</p>
           </div>
         </div>
-        {/*
-        <div className="my-6 print:my-4">
-          <div className="text-center">
-            <img 
-              src={firmaImg} 
-              alt="Firma Digital" 
-              className="mx-auto h-24 print:h-20 object-contain mb-2"
-              style={{ maxWidth: '300px' }}
-            />
-            <div className=""></div>
-          </div>
-        </div>
-        */}
 
         <div className="my-6 print:my-4">
-  <div className="text-center">
-    <div className="inline-block">
-      {/*
-      <img 
-        src={firmaImg} 
-        alt="Firma Digital" 
-        className="mx-auto h-24 print:h-20 object-contain mb-0"
-        style={{ maxWidth: '300px', marginBottom: '-10px' }}
-      />
-      */}
-      <div className="w-64 h-20 border-b-2 border-gray-800 mb-1"></div>
-            <p className="text-xs text-gray-600">Firma y Sello</p>
-    </div>
-  </div>
-</div>
+          <div className="text-center">
+            <div className="inline-block">
+              <div className="w-64 h-20 border-b-2 border-gray-800 mb-1"></div>
+              <p className="text-xs text-gray-600">Firma y Sello</p>
+            </div>
+          </div>
+        </div>
 
         {/* Información del profesional */}
         <div className="border-t-2 border-gray-200 pt-2">
