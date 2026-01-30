@@ -204,6 +204,25 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
         </div>
         */}
 
+        <div className="my-6 print:my-4">
+  <div className="text-center">
+    <div className="inline-block">
+      {/*
+      <img 
+        src={firmaImg} 
+        alt="Firma Digital" 
+        className="mx-auto h-24 print:h-20 object-contain mb-0"
+        style={{ maxWidth: '300px', marginBottom: '-10px' }}
+      />
+      */}
+      <div className="w-64 h-20 border-b-2 border-gray-800 mb-1"></div>
+      
+      <p className="text-xs font-bold text-gray-800">Q.F.B ELIUTH GARCIA CRUZ</p>
+      <p className="text-xs text-gray-600">Firma y Sello</p>
+    </div>
+  </div>
+</div>
+
         {/* Información del profesional */}
         <div className="border-t-2 border-gray-200 pt-2">
           <div className="text-center space-y-1">
