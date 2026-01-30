@@ -39,7 +39,13 @@ const PatientSearchsModal = ({ onClose, onSelectPatient }) => {
   const fetchPatients = async () => {
     try {
       setIsLoading(true);
-      const response = await pacientesAPI.getAll({ limit: 100 });
+      // ✅ CAMBIADO: Traer TODOS los pacientes con activo='all'
+      const response = await pacientesAPI.getAll({ 
+        limit: 1000,  // Límite alto para traer todos
+        activo: 'all' // ✅ Esto trae TODOS (viejos y nuevos)
+      });
+      
+      console.log('📊 Pacientes en modal de búsqueda:', response.data?.length || 0);
       setPatients(response.data || []);
       setFilteredPatients(response.data || []);
     } catch (error) {
@@ -181,7 +187,7 @@ const PatientSearchsModal = ({ onClose, onSelectPatient }) => {
               Seleccionar Paciente
             </h2>
             <p className="text-sm text-gray-600 font-inter">
-              Busca y selecciona el paciente para esta prueba
+              Busca y selecciona el paciente para esta prueba • {patients.length} pacientes disponibles
             </p>
           </div>
           <button
@@ -238,13 +244,18 @@ const PatientSearchsModal = ({ onClose, onSelectPatient }) => {
                       <p className="font-medium text-gray-900 font-poppins truncate">
                         {patient.nombre}
                       </p>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
                         <p className="text-xs text-gray-600 font-inter">
                           <span className="font-medium">Exp:</span> {patient.numeroExpediente || 'N/A'}
                         </p>
                         {patient.curp && (
                           <p className="text-xs text-gray-600 font-inter">
                             <span className="font-medium">CURP:</span> {patient.curp}
+                          </p>
+                        )}
+                        {patient.telefono && (
+                          <p className="text-xs text-gray-600 font-inter">
+                            <span className="font-medium">Tel:</span> {patient.telefono}
                           </p>
                         )}
                       </div>

@@ -190,8 +190,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
             <p className="text-xs font-bold">FIN DEL INFORME</p>
           </div>
         </div>
-
-        {/* ✅ Firma digitalizada */}
+        {/*
         <div className="my-6 print:my-4">
           <div className="text-center">
             <img 
@@ -203,6 +202,7 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
             <div className=""></div>
           </div>
         </div>
+        */}
 
         {/* Información del profesional */}
         <div className="border-t-2 border-gray-200 pt-2">
