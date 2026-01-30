@@ -2,6 +2,9 @@
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react/prop-types */
 
+// 🏥 Logo de Farmacias Karyme - Ruta al logo en public/images
+const LOGO_FARMACIA = '/images/logo-farmacia.png';
+
 const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -74,13 +77,26 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
     <div className="bg-white p-4 print:p-2">
       <div className="max-w-4xl mx-auto bg-white border border-gray-300 shadow-lg p-4 print:p-2 print:shadow-none" style={{ fontFamily: 'Arial, sans-serif' }}>
         
-        {/* Header con logo y título */}
+        {/* Header con logo y título - MODIFICADO ✅ */}
         <div className="border-b-2 border-blue-600 pb-2 mb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mr-2">
+              {/* ✅ CAMBIO: Logo de Farmacias Karyme en lugar del círculo azul */}
+              <img 
+                src={LOGO_FARMACIA} 
+                alt="Farmacias Karyme"
+                className="w-20 h-20 object-contain mr-3"
+                onError={(e) => {
+                  // Fallback si no carga la imagen
+                  e.target.style.display = 'none';
+                  e.target.nextElementSibling.style.display = 'flex';
+                }}
+              />
+              {/* Fallback: círculo azul si falla la imagen */}
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full items-center justify-center mr-2" style={{ display: 'none' }}>
                 <div className="text-white font-bold text-xs">SALUD</div>
               </div>
+              
               <div>
                 <h1 className="text-sm font-bold text-gray-800">
                   "SALUD AL ALCANCE DE TODOS"

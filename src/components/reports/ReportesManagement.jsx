@@ -91,13 +91,10 @@ const ReportViewModal = ({ report, onClose, onDownload }) => {
     });
   };
 
-  // Si hay pdfUrl, mostrar el PDF
   if (report.pdfUrl) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-2xl w-full h-full sm:max-w-6xl sm:max-h-[95vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-          
-          {/* Header */}
           <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-blue-600 text-white flex-shrink-0">
             <div>
               <h2 className="text-lg sm:text-xl font-bold">Vista Previa - Reporte</h2>
@@ -119,8 +116,6 @@ const ReportViewModal = ({ report, onClose, onDownload }) => {
               </button>
             </div>
           </div>
-          
-          {/* PDF Viewer */}
           <div className="flex-1 overflow-hidden bg-gray-100 min-h-0">
             <iframe
               src={report.pdfUrl}
@@ -134,7 +129,6 @@ const ReportViewModal = ({ report, onClose, onDownload }) => {
     );
   }
 
-  // Si no hay PDF, mostrar datos básicos
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -339,7 +333,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     fetchReportes();
   };
 
-  // ✅ Función auxiliar para reconstruir formData desde los resultados guardados
   const reconstructFormDataFromReport = (report) => {
     console.log('🔍 Reconstruyendo formData desde:', report);
     
@@ -349,7 +342,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       observaciones: report.observaciones || ''
     };
 
-    // Reconstruir valores de resultados
     console.log('📊 Resultados a procesar:', report.resultados);
     report.resultados?.forEach((resultado) => {
       const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
@@ -357,7 +349,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       formData[subPruebaId] = resultado.valor;
     });
 
-    // Reconstruir campos adicionales
     report.camposAdicionales?.forEach((campo) => {
       const campoId = campo._id?.$oid || campo._id;
       formData[`campo_${campoId}`] = campo.valor;
@@ -367,7 +358,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     return formData;
   };
 
-  // ✅ Función auxiliar para reconstruir testConfig desde datosPrueba
   const reconstructTestConfigFromReport = async (report) => {
     console.log('🔍 Reconstruyendo testConfig desde:', report);
     console.log('📊 Resultados guardados:', report.resultados);
@@ -422,69 +412,198 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
     };
   };
 
-  // ✅ ACTUALIZADO: Abrir diálogo de impresión en lugar de descargar PDF
-  const handleDownload = async (report) => {
-    try {
-      setSuccessMessage('Preparando reporte para impresión...');
-      
-      console.log('🎯 Iniciando impresión de reporte:', report.folio);
-      
-      console.log('📋 Paso 1: Reconstruyendo testConfig...');
-      const testConfig = await reconstructTestConfigFromReport(report);
-      console.log('✅ TestConfig reconstruido:', testConfig);
-      
-      console.log('📋 Paso 2: Reconstruyendo formData...');
-      const formData = reconstructFormDataFromReport(report);
-      console.log('✅ FormData reconstruido:', formData);
-      
-      const selectedPatient = {
-        nombre: report.datosPaciente?.nombre || 'N/A',
-        numeroExpediente: report.datosPaciente?.numeroExpediente || report.datosPaciente?.expediente || 'N/A',
-        edad: report.datosPaciente?.edad || 'N/A'
-      };
-      console.log('✅ Datos del paciente:', selectedPatient);
+const handleDownload = async (report) => {
+  try {
+    setSuccessMessage('Preparando reporte para impresión...');
+    
+    console.log('🎯 Iniciando impresión de reporte:', report.folio);
+    
+    console.log('📋 Paso 1: Reconstruyendo testConfig...');
+    const testConfig = await reconstructTestConfigFromReport(report);
+    console.log('✅ TestConfig reconstruido:', testConfig);
+    
+    console.log('📋 Paso 2: Reconstruyendo formData...');
+    const formData = reconstructFormDataFromReport(report);
+    console.log('✅ FormData reconstruido:', formData);
+    
+    const selectedPatient = {
+      nombre: report.datosPaciente?.nombre || 'N/A',
+      numeroExpediente: report.datosPaciente?.numeroExpediente || report.datosPaciente?.expediente || 'N/A',
+      edad: report.datosPaciente?.edad || 'N/A'
+    };
+    console.log('✅ Datos del paciente:', selectedPatient);
 
-      console.log('📋 Paso 3: Creando elemento temporal...');
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.top = '0';
-      tempDiv.style.width = '794px';
-      document.body.appendChild(tempDiv);
+    console.log('📋 Paso 3: Creando elemento temporal...');
+    const tempDiv = document.createElement('div');
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '0';
+    tempDiv.style.width = '794px';
+    document.body.appendChild(tempDiv);
 
-      console.log('📋 Paso 4: Importando módulos...');
-      const React = (await import('react')).default;
-      const ReactDOM = (await import('react-dom/client')).default;
-      const ReportPreview = (await import('./ReportPreview')).default;
+    console.log('📋 Paso 4: Importando módulos...');
+    const React = (await import('react')).default;
+    const ReactDOM = (await import('react-dom/client')).default;
+    const ReportPreview = (await import('./ReportPreview')).default;
 
-      console.log('📋 Paso 5: Renderizando ReportPreview...');
-      const root = ReactDOM.createRoot(tempDiv);
+    console.log('📋 Paso 5: Renderizando ReportPreview...');
+    const root = ReactDOM.createRoot(tempDiv);
+    
+    await new Promise((resolve) => {
+      root.render(
+        React.createElement(ReportPreview, {
+          testConfig,
+          formData,
+          selectedPatient
+        })
+      );
+      setTimeout(resolve, 1000);
+    });
+
+    console.log('✅ Contenido renderizado');
+
+    const reportElement = tempDiv.firstChild;
+    if (!reportElement) {
+      alert('Error: No se encontró el reporte');
+      root.unmount();
+      document.body.removeChild(tempDiv);
+      return;
+    }
+
+    console.log('📋 Paso 6: Preparando HTML para impresión...');
+    
+    // Detectar si es móvil
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      console.log('📱 Móvil detectado - usando ventana nueva con botón de volver...');
       
-      await new Promise((resolve) => {
-        root.render(
-          React.createElement(ReportPreview, {
-            testConfig,
-            formData,
-            selectedPatient
-          })
-        );
-        setTimeout(resolve, 1000);
-      });
-
-      console.log('✅ Contenido renderizado');
-
-      // Obtener el elemento del reporte
-      const reportElement = tempDiv.firstChild;
-      if (!reportElement) {
-        alert('Error: No se encontró el reporte');
-        root.unmount();
-        document.body.removeChild(tempDiv);
-        return;
+      // HTML simplificado para móvil con botón de volver
+      const htmlContentMobile = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte Médico - ${report.folio}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+      @page { size: A4; margin: 0.5in; }
+      body { margin: 0; padding: 0; padding-top: 70px; }
+      * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+      @media print {
+        .no-print { display: none !important; }
+        body { padding-top: 0; }
       }
+      .header-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .close-button {
+        background: white;
+        color: #ef4444;
+        padding: 14px 28px;
+        border-radius: 8px;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .close-button:active {
+        transform: scale(0.95);
+        background: #fee;
+      }
+      .header-text {
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        margin-right: 12px;
+      }
+      .print-button {
+        background: #3b82f6;
+        color: white;
+        padding: 14px 24px;
+        border-radius: 8px;
+        font-weight: bold;
+        border: none;
+        font-size: 16px;
+        cursor: pointer;
+        margin-right: 8px;
+      }
+      .print-button:active {
+        background: #2563eb;
+        transform: scale(0.95);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header-bar no-print">
+      <div class="header-text">
+        📄 Reporte Médico
+      </div>
+      <div style="display: flex; align-items: center;">
+        <button onclick="window.print()" class="print-button">
+          🖨️ Imprimir
+        </button>
+        <button onclick="window.close()" class="close-button">
+          ← Volver
+        </button>
+      </div>
+    </div>
+    ${reportElement.innerHTML}
+  </body>
+</html>
+`;
 
-      console.log('📋 Paso 6: Abriendo diálogo de impresión...');
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContentMobile);
+        printWindow.document.close();
+        
+        // Abrir diálogo de impresión automáticamente
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      } else {
+        alert('Por favor permite las ventanas emergentes para imprimir el reporte');
+      }
+    }
+    else {
+      console.log('💻 Desktop detectado - usando iframe...');
       
-      // Crear iframe oculto
+      // Crear el HTML completo del reporte para desktop
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte Médico - ${report.folio}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+      @page { size: A4; margin: 0.5in; }
+      body { margin: 0; padding: 0; }
+      * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+    </style>
+  </head>
+  <body>
+    ${reportElement.innerHTML}
+  </body>
+</html>
+`;
+      
+      // En desktop: usar iframe oculto
       const iframe = document.createElement('iframe');
       iframe.style.position = 'absolute';
       iframe.style.width = '0';
@@ -492,57 +611,36 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
       iframe.style.border = 'none';
       document.body.appendChild(iframe);
 
-      // Escribir el contenido en el iframe
       const iframeDoc = iframe.contentWindow.document;
       iframeDoc.open();
-      iframeDoc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <title>Reporte Médico</title>
-            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-            <style>
-              @page { size: A4; margin: 0.5in; }
-              body { margin: 0; padding: 0; }
-              * { print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
-            </style>
-          </head>
-          <body>
-            ${reportElement.innerHTML}
-          </body>
-        </html>
-      `);
+      iframeDoc.write(htmlContent);
       iframeDoc.close();
 
-      // Esperar a que cargue y luego abrir diálogo de impresión
       setTimeout(() => {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
         
-        // Limpiar después de un tiempo
         setTimeout(() => {
           document.body.removeChild(iframe);
-          root.unmount();
-          document.body.removeChild(tempDiv);
         }, 1000);
-        
-        setSuccessMessage('');
       }, 250);
-      
-    } catch (err) {
-      console.error('Error al preparar reporte:', err);
-      setError('Error al preparar el reporte: ' + err.message);
     }
-  };
+    
+    // Limpiar elementos temporales
+    root.unmount();
+    document.body.removeChild(tempDiv);
+    setSuccessMessage('');
+    
+  } catch (err) {
+    console.error('Error al preparar reporte:', err);
+    setError('Error al preparar el reporte: ' + err.message);
+  }
+};
 
-  // ✅ ACTUALIZADO: handleView también usa iframe + print
   const handleView = async (report) => {
-    // Simplemente reutilizar handleDownload ya que ahora hace lo mismo
     handleDownload(report);
   };
 
-  // ✅ MODIFICADO: Ahora abre el modal de edición con ReportEditor
   const handleEdit = (report) => {
     console.log('✏️ Editando reporte:', report);
     setSelectedReport(report);
@@ -750,7 +848,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         />
       )}
 
-      {/* ✅ Modal de creación de nuevo reporte */}
       {activeModal === 'report' && (
         <ReportGenerator
           onBack={closeModal}
@@ -758,7 +855,6 @@ const ReportesManagement = ({ currentUser, onLogout, onNavigate }) => {
         />
       )}
 
-      {/* ✅ Modal de edición de reporte existente */}
       {activeModal === 'edit' && selectedReport && (
         <ReportEditor
           onBack={closeModal}
