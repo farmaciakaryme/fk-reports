@@ -162,11 +162,13 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, onPatien
                 <option key={opcion} value={opcion}>{opcion}</option>
               ))}
             </select>
-          ) : campo.tipo === 'numero' ? (
+          ) : campo.tipo === 'numero' || campo.tipo === 'number' ? (
             <input
               type="number"
+              step="0.01"
               value={formData[`campo_${campo._id}`] || ''}
               onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              placeholder={campo.placeholder || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           ) : campo.tipo === 'fecha' ? (
@@ -181,8 +183,12 @@ const DynamicForm = ({ testConfig, formData, onChange, selectedPatient, onPatien
               type="text"
               value={formData[`campo_${campo._id}`] || ''}
               onChange={(e) => onChange(`campo_${campo._id}`, e.target.value)}
+              placeholder={campo.placeholder || ''}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
+          )}
+          {campo.descripcion && (
+            <p className="text-xs text-gray-500 mt-1">{campo.descripcion}</p>
           )}
         </div>
       ))}
@@ -214,6 +220,7 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
   const [testConfig, setTestConfig] = useState(null);
   const [isLoadingTest, setIsLoadingTest] = useState(true);
 
+  // ✅ FUNCIÓN CORREGIDA: Reconstruir formData con campos adicionales
   const reconstructFormDataFromReport = (report) => {
     console.log('🔍 Reconstruyendo formData desde reporte:', report);
     
@@ -225,7 +232,18 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
 
     report.resultados?.forEach((resultado) => {
       const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
-      formData[subPruebaId] = resultado.valor;
+      console.log(`  - ${resultado.nombre}: ${resultado.valor} (ID: ${subPruebaId}, clave: ${resultado.clave})`);
+      
+      // ✅ NUEVO: Detectar si es campo adicional por su clave o unidad
+      if (resultado.clave === 'gradosAlcohol' || resultado.unidad === 'mg/L') {
+        // Es campo adicional - usar prefijo campo_
+        formData[`campo_${subPruebaId}`] = resultado.valor;
+        console.log(`    ↳ Guardado como campo adicional: campo_${subPruebaId} = ${resultado.valor}`);
+      } else {
+        // Es subprueba normal
+        formData[subPruebaId] = resultado.valor;
+        console.log(`    ↳ Guardado como subprueba: ${subPruebaId} = ${resultado.valor}`);
+      }
     });
 
     report.camposAdicionales?.forEach((campo) => {
@@ -237,6 +255,7 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     return formData;
   };
 
+  // ✅ FUNCIÓN CORREGIDA: Reconstruir testConfig con campos adicionales
   const reconstructTestConfigFromReport = async (report) => {
     console.log('🔍 Reconstruyendo testConfig desde reporte');
     
@@ -255,7 +274,8 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         
         if (pruebaCompleta.subPruebas && pruebaCompleta.subPruebas.length > 0) {
           console.log('✅ Prueba cargada con', pruebaCompleta.subPruebas.length, 'subPruebas');
-          return pruebaCompleta;
+          console.log('✅ Campos adicionales:', pruebaCompleta.camposAdicionales?.length || 0);
+          return pruebaCompleta; // ✅ Retorna con camposAdicionales incluidos
         }
       } catch (error) {
         console.error('❌ Error cargando prueba:', error);
@@ -263,23 +283,49 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     }
 
     console.log('⚠️ Usando fallback');
+    
+    // ✅ NUEVO: Separar subPruebas de camposAdicionales
+    const subPruebasResults = [];
+    const camposAdicionalesResults = [];
+    
+    report.resultados?.forEach(resultado => {
+      const subPruebaId = resultado.subPruebaId?.$oid || resultado.subPruebaId;
+      
+      // Detectar si es campo adicional por su clave o unidad
+      if (resultado.clave === 'gradosAlcohol' || resultado.unidad === 'mg/L') {
+        console.log(`  ✅ Campo adicional detectado: ${resultado.nombre}`);
+        camposAdicionalesResults.push({
+          _id: subPruebaId,
+          nombre: resultado.nombre,
+          clave: resultado.clave,
+          unidad: resultado.unidad || '',
+          tipo: 'number',
+          descripcion: resultado.referencia || ''
+        });
+      } else {
+        console.log(`  ✅ SubPrueba detectada: ${resultado.nombre}`);
+        subPruebasResults.push({
+          _id: subPruebaId,
+          nombre: resultado.nombre || resultado.clave || 'Sin nombre',
+          clave: resultado.clave,
+          unidad: resultado.unidad || '',
+          tipo: 'texto',
+          valoresReferencia: {
+            texto: resultado.referencia || 'Sin referencia disponible',
+            opciones: []
+          }
+        });
+      }
+    });
+
     return {
       _id: pruebaId || 'unknown',
       nombre: report.datosPrueba?.nombre || 'Reporte Médico',
       codigo: report.datosPrueba?.codigo || '',
       metodo: report.datosPrueba?.metodo || 'N/A',
       tecnica: report.datosPrueba?.tecnica || 'N/A',
-      subPruebas: report.resultados?.map(resultado => ({
-        _id: resultado.subPruebaId?.$oid || resultado.subPruebaId,
-        nombre: resultado.nombre || resultado.clave || 'Sin nombre',
-        clave: resultado.clave,
-        unidad: resultado.unidad || '',
-        tipo: 'texto',
-        valoresReferencia: {
-          texto: resultado.referencia || 'Sin referencia disponible',
-          opciones: []
-        }
-      })) || []
+      subPruebas: subPruebasResults,
+      camposAdicionales: camposAdicionalesResults // ✅ NUEVO: Incluir campos adicionales
     };
   };
 
@@ -323,7 +369,6 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     if (errors.length > 0) setErrors([]);
   }, [errors.length]);
 
-  // ✅ NUEVO: Manejador para cambios en datos del paciente
   const handlePatientChange = useCallback((field, value) => {
     setSelectedPatient(prev => ({ ...prev, [field]: value }));
     if (errors.length > 0) setErrors([]);
@@ -348,14 +393,16 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     setCurrentStep('preview');
   };
 
+  // ✅ FUNCIÓN CORREGIDA: Guardar con campos adicionales
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
       let resultados = [];
       
+      // Guardar subpruebas
       testConfig.subPruebas?.forEach((subPrueba) => {
         const valor = formData[subPrueba._id];
-        if (valor) {
+        if (valor !== null && valor !== undefined) {
           resultados.push({
             subPruebaId: subPrueba._id,
             clave: subPrueba.clave || subPrueba.nombre.toUpperCase(),
@@ -367,14 +414,17 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         }
       });
 
-      let camposAdicionales = [];
+      // ✅ NUEVO: Guardar camposAdicionales como resultados
       testConfig.camposAdicionales?.forEach((campo) => {
         const valor = formData[`campo_${campo._id}`];
-        if (valor) {
-          camposAdicionales.push({
-            _id: campo._id,
+        if (valor !== null && valor !== undefined && valor !== '') {
+          resultados.push({
+            subPruebaId: campo._id,
+            clave: campo.clave || campo.nombre.toUpperCase().replace(/\s+/g, ''),
             nombre: campo.nombre,
-            valor: valor
+            valor: valor.toString(),
+            unidad: campo.unidad || '',
+            referencia: campo.descripcion || ''
           });
         }
       });
@@ -383,10 +433,8 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
 
       const updateData = {
         resultados,
-        camposAdicionales,
         observaciones: formData.observaciones || '',
         fechaRealizacion: fechaRealizacion.toISOString(),
-        // ✅ NUEVO: Incluir datos del paciente actualizados
         datosPaciente: {
           nombre: selectedPatient.nombre,
           edad: parseInt(selectedPatient.edad),
@@ -409,14 +457,16 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
     }
   };
 
+  // ✅ FUNCIÓN CORREGIDA: Guardar e imprimir con campos adicionales
   const handleSaveAndPrint = async () => {
     setIsSaving(true);
     try {
       let resultados = [];
       
+      // Guardar subpruebas
       testConfig.subPruebas?.forEach((subPrueba) => {
         const valor = formData[subPrueba._id];
-        if (valor) {
+        if (valor !== null && valor !== undefined) {
           resultados.push({
             subPruebaId: subPrueba._id,
             clave: subPrueba.clave || subPrueba.nombre.toUpperCase(),
@@ -428,14 +478,17 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         }
       });
 
-      let camposAdicionales = [];
+      // ✅ NUEVO: Guardar camposAdicionales como resultados
       testConfig.camposAdicionales?.forEach((campo) => {
         const valor = formData[`campo_${campo._id}`];
-        if (valor) {
-          camposAdicionales.push({
-            _id: campo._id,
+        if (valor !== null && valor !== undefined && valor !== '') {
+          resultados.push({
+            subPruebaId: campo._id,
+            clave: campo.clave || campo.nombre.toUpperCase().replace(/\s+/g, ''),
             nombre: campo.nombre,
-            valor: valor
+            valor: valor.toString(),
+            unidad: campo.unidad || '',
+            referencia: campo.descripcion || ''
           });
         }
       });
@@ -444,10 +497,8 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
 
       const updateData = {
         resultados,
-        camposAdicionales,
         observaciones: formData.observaciones || '',
         fechaRealizacion: fechaRealizacion.toISOString(),
-        // ✅ NUEVO: Incluir datos del paciente actualizados
         datosPaciente: {
           nombre: selectedPatient.nombre,
           edad: parseInt(selectedPatient.edad),
@@ -470,8 +521,20 @@ const ReportEditor = ({ onBack, reportToEdit }) => {
         const canvas = await html2canvas(reportElement, {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           logging: false,
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          windowWidth: 794,
+          windowHeight: 1123,
+          ignoreElements: (element) => {
+            return element.tagName === 'IFRAME' || element.tagName === 'EMBED';
+          },
+          onclone: (clonedDoc) => {
+            const images = clonedDoc.getElementsByTagName('img');
+            Array.from(images).forEach(img => {
+              img.onerror = null;
+            });
+          }
         });
 
         const pdf = new jsPDF({
