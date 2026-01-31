@@ -222,10 +222,21 @@ const ReportPreview = ({ testConfig, formData, selectedPatient }) => {
           </div>
         </div>
 
-        <div className="my-6 print:my-4">
+        <div className="my-4 print:my-3">
           <div className="text-center">
             <div className="inline-block">
-              <div className="w-64 h-20 border-b-2 border-gray-800 mb-1"></div>
+              <div className="flex justify-center">
+                <img 
+                  src={firmaImg} 
+                  alt="Firma" 
+                  className="h-15 w-auto object-contain"
+                  style={{ 
+                    maxWidth: '100px',
+                    marginBottom: '-10px' // Compensa el espacio del PNG
+                   }}
+                />
+              </div>
+              <div className="w-64 h-0.5 border-b-2 border-gray-800 mb-1"></div>
               <p className="text-xs text-gray-600">Firma y Sello</p>
             </div>
           </div>
