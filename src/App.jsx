@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import LoginPage from './components/auth/LoginPage';
 import Dashboard from './components/navigation/Dashboard';
 import TestManagement from './components/Tests/TestsManagement';
-import ReportesManagement from './components/reports/ReportesManagement';
+import ReportesManagement from "./components/reports/ManagmentReports";
 import PatientsManagement from './components/patients/PatientsManagement';
 
 function App() {
