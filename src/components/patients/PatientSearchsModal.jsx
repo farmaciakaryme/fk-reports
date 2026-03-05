@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Search, X, User, Plus } from 'lucide-react';
 import { pacientesAPI } from '../../services/api';
+import { capitalizeName } from '../reports/ReportsGenerator/reportUtils';
 
 const PatientSearchsModal = ({ onClose, onSelectPatient }) => {
   const [patients, setPatients] = useState([]);
@@ -75,7 +76,7 @@ const PatientSearchsModal = ({ onClose, onSelectPatient }) => {
       );
 
       const response = await pacientesAPI.create({
-        nombre: newPatientData.nombre,
+        nombre: capitalizeName(newPatientData.nombre),
         edad: edad,
         fechaNacimiento: fechaNacimiento.toISOString().split('T')[0] // YYYY-MM-DD
       });
@@ -119,7 +120,7 @@ const PatientSearchsModal = ({ onClose, onSelectPatient }) => {
               <input
                 type="text"
                 value={newPatientData.nombre}
-                onChange={(e) => setNewPatientData({...newPatientData, nombre: e.target.value})}
+                onChange={(e) => setNewPatientData({...newPatientData, nombre: capitalizeName(e.target.value)})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 placeholder="Juan Pérez García"
                 autoFocus
