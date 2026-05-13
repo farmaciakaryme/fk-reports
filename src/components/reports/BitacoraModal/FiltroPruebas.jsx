@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { CheckSquare, Square } from 'lucide-react';
+import { resolverPrecioPrueba } from './priceUtils';
 
 const FiltroPruebas = ({
   pruebas,
@@ -31,6 +32,10 @@ const FiltroPruebas = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
         {pruebas.map((prueba) => {
           const isSelected = pruebasSeleccionadas.includes(prueba._id);
+          // Precio con la hora actual (para mostrar el precio vigente)
+          const precioActual = resolverPrecioPrueba(prueba, new Date().toISOString());
+          const esPorPeriodo = prueba.precios?.tipo === 'por_periodo';
+
           return (
             <button
               key={prueba._id}
@@ -49,6 +54,12 @@ const FiltroPruebas = ({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{prueba.nombre}</p>
                 <p className="text-xs text-gray-500 truncate">{prueba.codigo}</p>
+                {precioActual != null && (
+                  <p className="text-xs text-green-600 font-medium">
+                    ${precioActual}
+                    {esPorPeriodo && <span className="text-gray-400 font-normal ml-1">(vigente)</span>}
+                  </p>
+                )}
               </div>
             </button>
           );
