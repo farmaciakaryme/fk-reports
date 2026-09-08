@@ -5,6 +5,7 @@ import { X, Loader2, FlaskConical } from 'lucide-react';
 import SubpruebasList from './SubpruebasList';
 import AddSubpruebaForm from './AddSubpruebaForm';
 import ValoresReferenciaModal from './ValoresReferenciaModal';
+import PreciosForm from './PreciosForm';
 import { generateValoresReferencia, generateClave } from '../utils/testHelpers';
 
 const TestModal = ({ mode, test, onClose, onSave }) => {
@@ -18,8 +19,12 @@ const TestModal = ({ mode, test, onClose, onSave }) => {
     codigo: test?.codigo || '',
     categoria: test?.categoria || 'general',
     subPruebas: test?.subPruebas || [],
-    camposAdicionales: test?.camposAdicionales || []
+    camposAdicionales: test?.camposAdicionales || [],
+    precio: test?.precio ?? 0,
+    precios: test?.precios || { tipo: 'fijo', precioFijo: null, periodos: [] }
   });
+
+  const setPrecios = (precios) => setFormData((prev) => ({ ...prev, precios }));
 
   const [tempSubPrueba, setTempSubPrueba] = useState({
     nombre: '',
@@ -36,7 +41,49 @@ const TestModal = ({ mode, test, onClose, onSave }) => {
       return;
     }
 
+    if (formData.precios.tipo === 'fijo') {
+      if (formData.precios.precioFijo === null || formData.precios.precioFijo === '') {
+        alert('Ingresa el precio fijo de la prueba');
+        return;
+      }
+    } else if (formData.precios.tipo === 'por_periodo') {
+      if (formData.precios.periodos.length === 0) {
+        alert('Agrega al menos un periodo de precio');
+        return;
+      }
+      const periodoInvalido = formData.precios.periodos.some(
+        (p) => !p.nombre.trim() || !p.horaInicio || !p.horaFin || p.precio === '' || p.precio === null
+      );
+      if (periodoInvalido) {
+        alert('Completa nombre, horario y precio en todos los periodos');
+        return;
+      }
+    }
+
     const dataToSend = { ...formData };
+
+    // Normaliza los precios y sincroniza el campo legado `precio`
+    if (dataToSend.precios.tipo === 'fijo') {
+      dataToSend.precios = {
+        tipo: 'fijo',
+        precioFijo: Number(dataToSend.precios.precioFijo),
+        periodos: []
+      };
+      dataToSend.precio = dataToSend.precios.precioFijo;
+    } else {
+      dataToSend.precios = {
+        tipo: 'por_periodo',
+        precioFijo: null,
+        periodos: dataToSend.precios.periodos.map((p) => ({
+          nombre: p.nombre.trim(),
+          horaInicio: p.horaInicio,
+          horaFin: p.horaFin,
+          precio: Number(p.precio)
+        }))
+      };
+      dataToSend.precio = 0;
+    }
+
     if (!dataToSend.codigo) {
       const categoria = dataToSend.categoria.substring(0, 3).toUpperCase();
       const nombre = generateClave(dataToSend.nombre).substring(0, 4);
@@ -191,6 +238,11 @@ const TestModal = ({ mode, test, onClose, onSave }) => {
                   </select>
                 </div>
               </div>
+            </div>
+
+            {/* Precio */}
+            <div>
+              <PreciosForm precios={formData.precios} setPrecios={setPrecios} />
             </div>
 
             {/* Subpruebas */}
