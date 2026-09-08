@@ -148,13 +148,16 @@ const useBitacora = () => {
   const [pruebaMap, setPruebaMap] = useState({});
   const [pruebaCertificado, setPruebaCertificado] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
 
   // Filtros
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [pruebasSeleccionadas, setPruebasSeleccionadas] = useState([]);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [busquedaNombre, setBusquedaNombre] = useState('');
 
   // Opciones de columnas
   const [mostrarColumnaPrecio, setMostrarColumnaPrecio] = useState(false);
@@ -169,38 +172,62 @@ const useBitacora = () => {
   const [preciosOverride, setPreciosOverride] = useState({}); // { id: number|null }
   const [preciosCertOverride, setPreciosCertOverride] = useState({}); // { id: number|null }
 
+  // fetchData centraliza la carga desde la BD. Se usa tanto en el montaje inicial
+  // como en el refresco manual, para que los cambios hechos en otras pantallas
+  // (nuevo paciente, precio actualizado, prueba nueva, etc.) se reflejen aquí.
+  const fetchData = async ({ esRefresco = false } = {}) => {
+    if (esRefresco) setIsRefreshing(true);
+    else setIsLoading(true);
+    setError(null);
+    try {
+      const [reportesRes, pruebasRes] = await Promise.all([
+        reportesAPI.getAll({ limit: 1000 }),
+        pruebasAPI.getAll({ activo: 'true' }),
+      ]);
+      const pruebasData = pruebasRes.data || [];
+      const map = buildPruebaMap(pruebasData);
+
+      const certPrueba = pruebasData.find(
+        (p) =>
+          p.nombre?.toLowerCase().includes('certificado') ||
+          p.codigo?.toLowerCase().includes('cert')
+      );
+      if (certPrueba) setPruebaCertificado(certPrueba);
+
+      setReportes(reportesRes.data || []);
+      setPruebas(pruebasData);
+      setPruebaMap(map);
+
+      // En la carga inicial seleccionamos todas las pruebas.
+      // En un refresco, conservamos lo que el usuario ya tenía elegido
+      // y sólo agregamos automáticamente las pruebas nuevas que no existían antes.
+      setPruebasSeleccionadas((prev) => {
+        if (!esRefresco || prev.length === 0) return pruebasData.map((p) => p._id);
+        const idsActuales = new Set(pruebasData.map((p) => p._id));
+        const seleccionValida = prev.filter((id) => idsActuales.has(id));
+        const idsNuevas = pruebasData
+          .map((p) => p._id)
+          .filter((id) => !prev.includes(id));
+        return [...seleccionValida, ...idsNuevas];
+      });
+
+      setUltimaActualizacion(new Date());
+    } catch (err) {
+      console.error('Error al cargar datos de bitacora:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [reportesRes, pruebasRes] = await Promise.all([
-          reportesAPI.getAll({ limit: 1000 }),
-          pruebasAPI.getAll({ activo: 'true' }),
-        ]);
-        const pruebasData = pruebasRes.data || [];
-        const map = buildPruebaMap(pruebasData);
-
-        const certPrueba = pruebasData.find(
-          (p) =>
-            p.nombre?.toLowerCase().includes('certificado') ||
-            p.codigo?.toLowerCase().includes('cert')
-        );
-        if (certPrueba) setPruebaCertificado(certPrueba);
-
-        setReportes(reportesRes.data || []);
-        setPruebas(pruebasData);
-        setPruebaMap(map);
-        setPruebasSeleccionadas(pruebasData.map((p) => p._id));
-      } catch (err) {
-        console.error('Error al cargar datos de bitacora:', err);
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresco manual: vuelve a pedir reportes y pruebas a la BD sin cerrar el modal.
+  const refrescar = () => fetchData({ esRefresco: true });
 
   // ── Acciones de filtro ──────────────────────────────────────────────────
   const togglePrueba = (id) =>
@@ -265,6 +292,13 @@ const useBitacora = () => {
       filtrados = filtrados.filter((r) => {
         const pid = r.prueba?._id || r.prueba;
         return pruebasSeleccionadas.includes(pid);
+      });
+    }
+    if (busquedaNombre.trim()) {
+      const termino = busquedaNombre.trim().toLowerCase();
+      filtrados = filtrados.filter((r) => {
+        const nombre = (r.datosPaciente?.nombre || r.paciente?.nombre || '').toLowerCase();
+        return nombre.includes(termino);
       });
     }
     return filtrados;
@@ -377,7 +411,10 @@ const useBitacora = () => {
     pruebas,
     pruebaCertificado,
     isLoading,
+    isRefreshing,
     error,
+    ultimaActualizacion,
+    refrescar,
     fechaInicio,
     setFechaInicio,
     fechaFin,
@@ -385,6 +422,8 @@ const useBitacora = () => {
     pruebasSeleccionadas,
     mostrarFiltros,
     setMostrarFiltros,
+    busquedaNombre,
+    setBusquedaNombre,
     togglePrueba,
     seleccionarTodas,
     deseleccionarTodas,

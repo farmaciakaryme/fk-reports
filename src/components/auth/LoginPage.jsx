@@ -160,7 +160,7 @@ const LoginPage = ({ onLogin }) => {
               Credenciales de prueba:
             </p>
             <div className="space-y-2">
-              <button
+             {/* <button
                 type="button"
                 onClick={() => fillDemoCredentials('admin')}
                 disabled={isLoading}
@@ -176,6 +176,7 @@ const LoginPage = ({ onLogin }) => {
               >
                 👨‍⚕️ <strong>Laboratorista:</strong> linitomm@gmail.com
               </button>
+              */}
             </div>
           </div>
         </div>

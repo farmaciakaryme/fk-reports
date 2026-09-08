@@ -4,7 +4,7 @@ import {
   X, Download, Loader2, Calendar, FileText, Filter,
   Eye, EyeOff, Award, DollarSign, BarChart2,
   ChevronDown, ChevronUp, RotateCcw, PlusCircle, MinusCircle,
-  Edit3, Check, Info,
+  Edit3, Check, Info, RefreshCw, Search, UserX,
 } from 'lucide-react';
 import useBitacora, { calcularPrecioRegistro, calcularResumenPagina } from './useBitacora';
 import FiltroPruebas from './FiltroPruebas';
@@ -408,12 +408,77 @@ const FilaBitacora = ({
   );
 };
 
+// ── Panel: registros ocultos ──────────────────────────────────────────────
+// Lista independiente de la tabla de impresión, pensada para ver rápido
+// a quién ocultaste y regresarlo (uno por uno o todos a la vez).
+const PanelVisibilidad = ({ datosAgrupados, registrosOcultos, toggleRegistroVisible, mostrarTodosLosRegistros }) => {
+  const [abierto, setAbierto] = useState(true);
+
+  const visibles = datosAgrupados.filter((d) => !registrosOcultos.has(d.id));
+  const ocultos = datosAgrupados.filter((d) => registrosOcultos.has(d.id));
+
+  return (
+    <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+      <button
+        onClick={() => setAbierto(!abierto)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+      >
+        <span className="flex items-center gap-2">
+          <UserX className="w-4 h-4 text-orange-600" />
+          Registros ocultos ({ocultos.length})
+          <span className="text-gray-400 font-normal">· {visibles.length} se imprimen</span>
+        </span>
+        {abierto ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+      </button>
+
+      {abierto && (
+        <div className="border-t border-gray-100">
+          <div className="sticky top-0 bg-orange-50 px-3 py-1.5 flex items-center justify-between gap-1.5 text-[11px] font-semibold text-orange-800 border-b border-orange-100">
+            <span>No se imprimen ({ocultos.length})</span>
+            {ocultos.length > 0 && (
+              <button
+                onClick={mostrarTodosLosRegistros}
+                className="text-[10px] underline text-orange-700 hover:text-orange-900"
+              >
+                Restaurar todos
+              </button>
+            )}
+          </div>
+          {ocultos.length === 0 ? (
+            <p className="text-xs text-gray-400 px-3 py-3">No has ocultado a nadie.</p>
+          ) : (
+            <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+              {ocultos.map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-gray-50">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 truncate line-through">{d.nombre}</p>
+                    <p className="text-[10px] text-gray-400">{d.fecha} · {d.hora}</p>
+                  </div>
+                  <button
+                    title="Mostrar en la impresión"
+                    onClick={() => toggleRegistroVisible(d.id)}
+                    className="p-1 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50 flex-shrink-0"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Modal principal ───────────────────────────────────────────────────────
 const BitacoraModal = ({ onClose }) => {
   const {
-    pruebas, pruebaCertificado, isLoading, error,
+    pruebas, pruebaCertificado, isLoading, isRefreshing, error,
+    ultimaActualizacion, refrescar,
     fechaInicio, setFechaInicio, fechaFin, setFechaFin,
     pruebasSeleccionadas, mostrarFiltros, setMostrarFiltros,
+    busquedaNombre, setBusquedaNombre,
     togglePrueba, seleccionarTodas, deseleccionarTodas,
     datosAgrupados, datosVisibles, paginas, pacientesUnicos,
     abrirPanelImpresion,
@@ -427,139 +492,189 @@ const BitacoraModal = ({ onClose }) => {
   } = useBitacora();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-1 sm:p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[1600px] h-full sm:h-auto sm:max-h-[97vh] flex flex-col">
 
         {/* Header */}
         <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-blue-600 text-white rounded-t-xl flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-            <h2 className="text-sm sm:text-lg font-semibold">
-              Bitácora de Atención de Certificación Médica
-            </h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-lg font-semibold truncate">
+                Bitácora de Atención de Certificación Médica
+              </h2>
+              {ultimaActualizacion && (
+                <p className="text-[10px] sm:text-xs text-blue-100">
+                  Datos actualizados: {ultimaActualizacion.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-blue-700 rounded-full transition-colors">
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-        </div>
-
-        {/* Filtros y opciones */}
-        <div className="p-3 sm:p-4 border-b bg-gray-50 space-y-2 flex-shrink-0">
-          <p className="text-xs sm:text-sm text-gray-600">
-            Filtra y descarga reportes clínicos por rango de fechas y tipo de prueba
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
-            <div className="flex-1">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                <Calendar className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
-                Fecha inicial
-              </label>
-              <input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-                className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                <Calendar className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
-                Fecha final
-              </label>
-              <input
-                type="date"
-                value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
-                className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm"
-              />
-            </div>
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <button
-              onClick={() => setMostrarFiltros(!mostrarFiltros)}
-              className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
+              onClick={refrescar}
+              disabled={isRefreshing || isLoading}
+              title="Volver a cargar pacientes y precios desde la base de datos"
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-lg text-xs sm:text-sm font-medium transition-colors"
             >
-              <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
-              Filtrar Pruebas
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
             </button>
-            <button
-              onClick={abrirPanelImpresion}
-              disabled={datosVisibles.length === 0}
-              className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
-            >
-              <Download className="w-3 h-3 sm:w-4 sm:h-4" />
-              Descargar PDF
+            <button onClick={onClose} className="p-1 hover:bg-blue-700 rounded-full transition-colors">
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
-
-          <PanelOpciones
-            mostrarColumnaPrecio={mostrarColumnaPrecio}
-            setMostrarColumnaPrecio={setMostrarColumnaPrecio}
-            mostrarTablaResumen={mostrarTablaResumen}
-            setMostrarTablaResumen={setMostrarTablaResumen}
-            precioCertificadoMaestro={precioCertificadoMaestro}
-            setPrecioCertificadoMaestro={setPrecioCertificadoMaestro}
-            registrosOcultos={registrosOcultos}
-            mostrarTodosLosRegistros={mostrarTodosLosRegistros}
-            pruebaCertificado={pruebaCertificado}
-            datosVisibles={datosVisibles}
-            registrosConCertificado={registrosConCertificado}
-            agregarCertificadoATodos={agregarCertificadoATodos}
-            quitarCertificadoATodos={quitarCertificadoATodos}
-          />
-
-          {mostrarFiltros && (
-            <FiltroPruebas
-              pruebas={pruebas}
-              pruebasSeleccionadas={pruebasSeleccionadas}
-              onToggle={togglePrueba}
-              onSeleccionarTodas={seleccionarTodas}
-              onDeseleccionarTodas={deseleccionarTodas}
-            />
-          )}
         </div>
 
-        {/* Leyenda */}
-        <div className="px-4 py-1.5 bg-blue-50 border-b border-blue-100 flex flex-wrap gap-4 text-[11px] text-gray-500 flex-shrink-0">
-          <span className="flex items-center gap-1"><Award className="w-3 h-3 text-amber-500" /> Certificado individual</span>
-          <span className="flex items-center gap-1"><EyeOff className="w-3 h-3 text-red-400" /> Ocultar de impresión</span>
-          <span className="flex items-center gap-1"><Edit3 className="w-3 h-3 text-blue-400" /> Clic en precio para editar</span>
-          {registrosOcultos.size > 0 && (
-            <span className="text-orange-600 font-medium">{registrosOcultos.size} oculto{registrosOcultos.size !== 1 ? 's' : ''}</span>
-          )}
-          {registrosConCertificado.size > 0 && (
-            <span className="text-amber-600 font-medium">{registrosConCertificado.size} con certificado</span>
-          )}
-        </div>
+        {/* Cuerpo: barra lateral de controles + vista de la bitácora */}
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
-        {/* Contenido */}
-        <div className="flex-1 overflow-auto">
-          <div className="text-center mb-4 p-4">
-            <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-2">
-              BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
-            </h3>
-            <p className="text-xs sm:text-sm text-gray-600">
-              Mostrando {pacientesUnicos} pacientes únicos ({datosVisibles.length} registros) —{' '}
-              {paginas.length} página{paginas.length !== 1 ? 's' : ''}
-            </p>
-            {pruebasSeleccionadas.length < pruebas.length && (
-              <p className="text-xs text-blue-600 mt-1">
-                Filtrado por {pruebasSeleccionadas.length} prueba{pruebasSeleccionadas.length !== 1 ? 's' : ''}
+          {/* ── Barra lateral izquierda: todos los mandos y filtros ── */}
+          <aside className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200 bg-gray-50 overflow-y-auto max-h-[42vh] lg:max-h-full">
+            <div className="p-3 sm:p-4 space-y-3">
+              <p className="text-xs sm:text-sm text-gray-600">
+                Filtra y descarga reportes clínicos por rango de fechas y tipo de prueba
               </p>
-            )}
-          </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center h-48">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                  <Search className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
+                  Buscar paciente
+                </label>
+                <input
+                  type="text"
+                  value={busquedaNombre}
+                  onChange={(e) => setBusquedaNombre(e.target.value)}
+                  placeholder="Nombre del paciente..."
+                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
+                    Fecha inicial
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
+                    Fecha final
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
+                <button
+                  onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                  className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
+                >
+                  <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Filtrar Pruebas
+                </button>
+                <button
+                  onClick={abrirPanelImpresion}
+                  disabled={datosVisibles.length === 0}
+                  className="w-full px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs sm:text-sm font-medium"
+                >
+                  <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Descargar PDF
+                </button>
+              </div>
+
+              <PanelOpciones
+                mostrarColumnaPrecio={mostrarColumnaPrecio}
+                setMostrarColumnaPrecio={setMostrarColumnaPrecio}
+                mostrarTablaResumen={mostrarTablaResumen}
+                setMostrarTablaResumen={setMostrarTablaResumen}
+                precioCertificadoMaestro={precioCertificadoMaestro}
+                setPrecioCertificadoMaestro={setPrecioCertificadoMaestro}
+                registrosOcultos={registrosOcultos}
+                mostrarTodosLosRegistros={mostrarTodosLosRegistros}
+                pruebaCertificado={pruebaCertificado}
+                datosVisibles={datosVisibles}
+                registrosConCertificado={registrosConCertificado}
+                agregarCertificadoATodos={agregarCertificadoATodos}
+                quitarCertificadoATodos={quitarCertificadoATodos}
+              />
+
+              {mostrarFiltros && (
+                <FiltroPruebas
+                  pruebas={pruebas}
+                  pruebasSeleccionadas={pruebasSeleccionadas}
+                  onToggle={togglePrueba}
+                  onSeleccionarTodas={seleccionarTodas}
+                  onDeseleccionarTodas={deseleccionarTodas}
+                />
+              )}
+
+              <PanelVisibilidad
+                datosAgrupados={datosAgrupados}
+                registrosOcultos={registrosOcultos}
+                toggleRegistroVisible={toggleRegistroVisible}
+                mostrarTodosLosRegistros={mostrarTodosLosRegistros}
+              />
             </div>
-          ) : error ? (
-            <div className="p-4 text-red-600 text-sm">Error: {error}</div>
-          ) : datosAgrupados.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-              <FileText className="w-16 h-16 mb-4 text-gray-300" />
-              <p className="text-sm">No hay reportes con los filtros seleccionados</p>
+          </aside>
+
+          {/* ── Panel derecho: vista de la bitácora ── */}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+
+            {/* Leyenda */}
+            <div className="px-4 py-1.5 bg-blue-50 border-b border-blue-100 flex flex-wrap gap-4 text-[11px] text-gray-500 flex-shrink-0">
+              <span className="flex items-center gap-1"><Award className="w-3 h-3 text-amber-500" /> Certificado individual</span>
+              <span className="flex items-center gap-1"><EyeOff className="w-3 h-3 text-red-400" /> Ocultar de impresión</span>
+              <span className="flex items-center gap-1"><Edit3 className="w-3 h-3 text-blue-400" /> Clic en precio para editar</span>
+              {registrosOcultos.size > 0 && (
+                <span className="text-orange-600 font-medium">{registrosOcultos.size} oculto{registrosOcultos.size !== 1 ? 's' : ''}</span>
+              )}
+              {registrosConCertificado.size > 0 && (
+                <span className="text-amber-600 font-medium">{registrosConCertificado.size} con certificado</span>
+              )}
             </div>
-          ) : (
+
+            {/* Contenido */}
+            <div className="flex-1 overflow-auto">
+              <div className="text-center mb-4 p-4">
+                <h3 className="text-base sm:text-xl font-bold text-gray-900 mb-2">
+                  BITÁCORA DE ATENCIÓN DE CERTIFICACIÓN MÉDICA
+                </h3>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  Mostrando {pacientesUnicos} pacientes únicos ({datosVisibles.length} registros) —{' '}
+                  {paginas.length} página{paginas.length !== 1 ? 's' : ''}
+                </p>
+                {pruebasSeleccionadas.length < pruebas.length && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Filtrado por {pruebasSeleccionadas.length} prueba{pruebasSeleccionadas.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+
+              {isLoading ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+              ) : error ? (
+                <div className="p-4 text-red-600 text-sm">Error: {error}</div>
+              ) : datosAgrupados.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                  <FileText className="w-16 h-16 mb-4 text-gray-300" />
+                  <p className="text-sm">No hay reportes con los filtros seleccionados</p>
+                </div>
+              ) : (
             <div id="bitacora-print-area">
               {paginas.map((filasPagina, indexPagina) => (
                 <div key={indexPagina} className="bitacora-page mb-8 border border-gray-200 rounded-lg overflow-hidden">
@@ -638,14 +753,14 @@ const BitacoraModal = ({ onClose }) => {
                       </div>
                     </div>
 
-                    <div className="text-center mt-6 text-[10px] text-gray-500">
-                      Página {indexPagina + 1} de {paginas.length}
-                    </div>
+                  
                   </div>
                 </div>
               ))}
             </div>
           )}
+            </div>
+          </div>
         </div>
 
         <div className="p-3 sm:p-4 border-t bg-gray-50 text-center flex-shrink-0">
