@@ -8,10 +8,22 @@ const esCampoAdicional = (resultado) => {
 
 // Reconstruye el objeto formData a partir de un reporte guardado en la base de datos.
 // Separa subpruebas normales de campos adicionales usando el prefijo campo_.
+// Convierte un Date a 'YYYY-MM-DD' usando componentes LOCALES (no UTC),
+// para evitar que la fecha salte al dia siguiente cuando la hora local
+// cae despues de las 18:00 (UTC-6 cruza medianoche en UTC).
+const getLocalDateStringFromDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const reconstructFormData = (report) => {
+  const fechaRealizacion = new Date(report.fechaRealizacion);
+
   const formData = {
-    fecha: new Date(report.fechaRealizacion).toISOString().split('T')[0],
-    hora: new Date(report.fechaRealizacion).toTimeString().slice(0, 5),
+    fecha: getLocalDateStringFromDate(fechaRealizacion),
+    hora: fechaRealizacion.toTimeString().slice(0, 5),
     observaciones: report.observaciones || ''
   };
 
